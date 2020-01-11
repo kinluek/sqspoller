@@ -27,12 +27,11 @@ func TestPoller(t *testing.T) {
 	}, os.Getenv("TMPDIR"))
 	defer container.Cleanup()
 
-	sqsHostPort := container.ExposedPorts["4576"][0].HostPort
-	endPoint := "http://localhost:"+sqsHostPort
-
-
 	// ==============================================================
 	// Setup SQS client using AWS SDK
+
+	sqsHostPort := container.ExposedPorts["4576"][0].HostPort
+	endPoint := "http://localhost:"+sqsHostPort
 
 	sess := session.Must(session.NewSession(&aws.Config{
 		Credentials: credentials.AnonymousCredentials,
