@@ -27,12 +27,16 @@ func TestPoller(t *testing.T) {
 	}, os.Getenv("TMPDIR"))
 	defer container.Cleanup()
 
+	sqsHostPort := container.ExposedPorts["4576"][0].HostPort
+	endPoint := "http://localhost:"+sqsHostPort
+
+
 	// ==============================================================
 	// Setup SQS client using AWS SDK
 
 	sess := session.Must(session.NewSession(&aws.Config{
 		Credentials: credentials.AnonymousCredentials,
-		Endpoint:    aws.String("http://localhost:4576"),
+		Endpoint:    aws.String(endPoint),
 		Region:      aws.String("eu-west-1")},
 	))
 	svc := sqs.New(sess)
@@ -44,12 +48,12 @@ func TestPoller(t *testing.T) {
 	queueName := "test-queue"
 	var queueURL *string
 
-	for i := 0; i < 25; i++ {
+	for i := 0; i < 20; i++ {
 		result, err := svc.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(queueName),
 		})
 		if err == nil {
-			t.Log("got queueURL: ", result.QueueUrl)
+			t.Log("queue created: ", *result.QueueUrl)
 			queueURL = result.QueueUrl
 			break
 		}

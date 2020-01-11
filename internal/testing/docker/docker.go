@@ -3,6 +3,7 @@ package docker
 import (
 	"encoding/json"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -12,15 +13,15 @@ import (
 // and holds the information for communicating
 // with the running docker container.
 type Container struct {
-	t       *testing.T
-	ID      string
-	Ports   []Port
-	Volumes []string
+	t            *testing.T
+	ID           string
+	ExposedPorts map[string][]Port // the map keys are the exposed container ports
+	Volumes      []string
 }
 
 type Port struct {
 	HostIP   string `json:"HostIp"`
-	HostPort string `json:"Port"`
+	HostPort string `json:"HostPort"`
 }
 
 // StartLocalStackContainer spins up a localstack container to
@@ -37,7 +38,7 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string, tmpDirVolu
 		}
 	}
 
-	args := []string{"container", "run", "-p", "4567-4584:4567-4584", "-d", "-v", tmpDirVolume + ":/tmp/localstack"}
+	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack"}
 	args = append(args, envArgs...)
 	args = append(args, "localstack/localstack")
 
@@ -69,9 +70,7 @@ func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
 			Name string `json:"Name"`
 		} `json:"Mounts"`
 		NetworkSettings struct {
-			Ports struct {
-				Five432TCP []Port `json:"5432/tcp"`
-			} `json:"Ports"`
+			Ports map[string][]Port `json:"Ports"`
 		} `json:"NetworkSettings"`
 	}
 
@@ -87,11 +86,19 @@ func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
 		}
 	}
 
+	exposedPorts := make(map[string][]Port)
+	portReg := regexp.MustCompile(`^\d+`)
+
+	for key, value := range containerInfo[0].NetworkSettings.Ports {
+		containerPort := portReg.Find([]byte(key))
+		exposedPorts[string(containerPort)] = value
+	}
+
 	return &Container{
-		t:       t,
-		ID:      containerID,
-		Ports:   containerInfo[0].NetworkSettings.Ports.Five432TCP,
-		Volumes: volumes,
+		t:            t,
+		ID:           containerID,
+		ExposedPorts: exposedPorts,
+		Volumes:      volumes,
 	}
 }
 
@@ -130,6 +137,5 @@ func (c *Container) Cleanup() {
 			c.t.Fatalf("could not remove volumes for container: %v: %v: %v", c.ID, string(output), err)
 		}
 	}
-
 
 }
