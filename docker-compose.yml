@@ -15,4 +15,4 @@ services:
       - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
 
 
-#docker -run -d -p 4567-4584:4567-4584 -e SERVICES=sqs -e DEBUG=1 -e DATA_DIR=/tmp/localstack/data -e DOCKER_HOST=unix:///var/run/docker.sock -v $TMPDIR:/tmp/localstack
+#docker -run -d -p 4567-4584:4567-4584 -e SERVICES=sqs -e DEBUG=1 -e DATA_DIR=/tmp/localstack/data -e DOCKER_HOST=unix:///var/run/docker.sock -v $TMPDIR:/tmp/localstack localstack/localstack

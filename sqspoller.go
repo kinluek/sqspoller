@@ -60,7 +60,11 @@ func (p *Poller) Run() error {
 	for {
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 		if err := p.handler(ctx, out, err); err != nil {
-			return err
+			return &Error{
+				OriginalError: err,
+				Meta:          nil,
+				Message:       err.Error(),
+			}
 		}
 	}
 
