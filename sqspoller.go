@@ -49,8 +49,8 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 	p.handler = handler
 }
 
-// Run starts the Poller.
-func (p *Poller) Run() error {
+// StartPolling starts the poller.
+func (p *Poller) StartPolling() error {
 	if p.handler == nil {
 		return &Error{Message: "no handler detected: please provide a handler."}
 	}

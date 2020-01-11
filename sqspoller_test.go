@@ -76,11 +76,11 @@ func TestPoller(t *testing.T) {
 	}
 
 	// ==============================================================
-	// Run Poller and assert that the known value is returned
-	// to confirm that the poller runs fine.
+	// Start Polling and assert that the known value is returned
+	// to confirm that the poller runs as expected.
 
 	poller.Handle(handler)
-	err := poller.Run()
+	err := poller.StartPolling()
 
 	pollErr := err.(*sqspoller.Error)
 	if pollErr.OriginalError != confirmedRunning {
