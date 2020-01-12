@@ -1,9 +1,6 @@
 version: 2
 jobs:
   test:
-#    docker:
-#      - image: circleci/golang:latest
-#    working_directory: /go/src/github.com/mirrorweb/dora-go
     machine:
       image: circleci/classic:201808-01
     steps:
@@ -11,8 +8,6 @@ jobs:
       - run: pwd
       - run: ls
       - run: make NETWORK=test dockertest
-#      - run: docker run --privileged -it docker:dind
-#      - run: go test -v ./...
 workflows:
   version: 2
   test:

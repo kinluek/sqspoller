@@ -9,6 +9,4 @@ RUN apk update
 RUN apk add openrc --no-cache
 RUN rc-update add docker boot
 
-ENV ENVIRONMENT=CI
-
 ENTRYPOINT CGO_ENABLED=0 go test -v ./...

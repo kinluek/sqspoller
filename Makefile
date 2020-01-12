@@ -18,6 +18,7 @@ else
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v $(PWD):/go/code \
 	-e DOCKER_NETWORK=${NETWORK} \
+	-e ENVIRONMENT=CI \
 	--network ${NETWORK} \
 	kinluek/go-docker:entry
 
