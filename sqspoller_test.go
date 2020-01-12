@@ -14,7 +14,9 @@ import (
 	"time"
 )
 
+
 func TestPoller(t *testing.T) {
+	testEnv := os.Getenv("ENVIRONMENT")
 
 	// ==============================================================
 	// Setup local containerized SQS
@@ -27,11 +29,22 @@ func TestPoller(t *testing.T) {
 	}, os.Getenv("TMPDIR"))
 	defer container.Cleanup()
 
-	// ==============================================================
-	// Setup SQS client using AWS SDK
-
 	sqsHostPort := container.ExposedPorts["4576"][0].HostPort
 	endPoint := "http://localhost:" + sqsHostPort
+
+
+	if testEnv == "CI" {
+
+		// if the container has been started in a CI environment
+		// then localstack will run as a sibling container, therefore,
+		// we need to connect it to the same docker network as the
+		// application container to interact with it.
+		docker.NetworkConnect(t, os.Getenv("ENVIRONMENT"), container.ID)
+		endPoint = "http://" + container.ID[:12] + ":" + "4576"
+	}
+
+	// ==============================================================
+	// Setup SQS client using AWS SDK
 
 	sess := session.Must(session.NewSession(&aws.Config{
 		Credentials: credentials.AnonymousCredentials,
@@ -47,7 +60,8 @@ func TestPoller(t *testing.T) {
 	queueName := "test-queue"
 	var queueURL *string
 
-	for i := 0; i < 20; i++ {
+	limitSecs := 20
+	for i := 0; i < limitSecs; i++ {
 		result, err := svc.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(queueName),
 		})
@@ -56,8 +70,10 @@ func TestPoller(t *testing.T) {
 			queueURL = result.QueueUrl
 			break
 		}
-		t.Log("waiting for container to be ready...")
 		time.Sleep(time.Second)
+	}
+	if queueURL == nil {
+		t.Fatalf("failed to create queue in under %v seconds", limitSecs)
 	}
 
 	messageBody := "message-body"

@@ -38,7 +38,7 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string, tmpDirVolu
 		}
 	}
 
-	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack"}
+	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack", "--network-alias", "localstack"}
 	args = append(args, envArgs...)
 	args = append(args, "localstack/localstack")
 
@@ -49,6 +49,8 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string, tmpDirVolu
 // execStartContainerCommand takes the start container command and executes it
 // to return a *Container.
 func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
+	t.Helper()
+
 	idBuf, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("could not start container: %v", err)
@@ -99,6 +101,17 @@ func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
 		ID:           containerID,
 		ExposedPorts: exposedPorts,
 		Volumes:      volumes,
+	}
+}
+
+// NetworkConnect connects a container to the given network.
+func NetworkConnect(t *testing.T, network string, containerID string) {
+	t.Helper()
+
+	cmd := exec.Command("docker", "network", "connect", network, containerID)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to connect containers: %v, : %v", string(out), err)
 	}
 }
 
