@@ -12,7 +12,6 @@ func (p *Poller) Use(middleware ...Middleware) {
 	} else {
 		p.middleware = append(p.middleware, middleware...)
 	}
-
 }
 
 // wrapMiddleware creates a new handler by wrapping middleware around a final
@@ -34,3 +33,21 @@ func wrapMiddleware(middleware []Middleware, handler Handler) Handler {
 	return handler
 }
 
+
+//func Context() Middleware {
+//	f := func(handler Handler) Handler {
+//		h := func(ctx context.Context, msg *Message, err error) error {
+//			select {
+//			case <-ctx.Done():
+//				return ctx.Err()
+//			default:
+//				if err := handler(ctx, msg, err); err != nil {
+//					return err
+//				}
+//				return nil
+//			}
+//		}
+//		return h
+//	}
+//	return f
+//}

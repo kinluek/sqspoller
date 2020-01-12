@@ -2,9 +2,15 @@ package sqspoller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"time"
+)
+
+var (
+	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
 )
 
 // Handler is function which handles the incoming SQS
@@ -41,7 +47,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 	p := Poller{
 		client: sqsSvc,
 
-		Interval: 10 * time.Second,
+		Interval:     10 * time.Second,
+		AllowTimeout: false,
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -64,18 +71,23 @@ func (p *Poller) StartPolling() error {
 		return &Error{Message: "no handler detected: please provide a handler."}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 
-	if p.AllowTimeout {
-		ctx, cancel = context.WithTimeout(ctx, p.TimeoutNoMessages)
-	}
-
+	timeout := time.After(p.TimeoutNoMessages)
+poll:
 	for {
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-		if p.AllowTimeout && len(out.Messages) > 0 {
-			ctx, cancel = context.WithTimeout(ctx, p.TimeoutNoMessages)
+		//======================================================================
+		// Set times
+
+		interval := time.After(p.Interval)
+		if len(out.Messages) > 0 {
+			timeout = time.After(p.TimeoutNoMessages)
 		}
+
+		//======================================================================
+		// Handler is called here
 
 		if err := p.handler(ctx, &Message{out, p.client}, err); err != nil {
 			return &Error{
@@ -84,9 +96,26 @@ func (p *Poller) StartPolling() error {
 				Message:       err.Error(),
 			}
 		}
-	}
-	defer cancel()
 
+		//======================================================================
+		// Handle intervals and timeouts
+
+		for {
+			select {
+			case <-interval:
+				continue poll
+			case <-timeout:
+				if p.AllowTimeout {
+					return &Error{
+						OriginalError: ErrTimeoutNoMessages,
+						Meta:          nil,
+						Message:       fmt.Sprintf("%v: %v", ErrTimeoutNoMessages, p.TimeoutNoMessages),
+					}
+				}
+			}
+		}
+
+	}
 	return nil
 }
 
