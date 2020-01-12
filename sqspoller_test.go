@@ -39,7 +39,7 @@ func TestPoller(t *testing.T) {
 		// then localstack will run as a sibling container, therefore,
 		// we need to connect it to the same docker network as the
 		// application container to interact with it.
-		docker.NetworkConnect(t, os.Getenv("ENVIRONMENT"), container.ID)
+		docker.NetworkConnect(t, os.Getenv("DOCKER_NETWORK"), container.ID)
 		endPoint = "http://" + container.ID[:12] + ":" + "4576"
 	}
 
