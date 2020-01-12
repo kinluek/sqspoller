@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+// Handler is function which handles the incoming SQS
+// message.
+type Handler func(ctx context.Context, message *Message, err error) error
+
+// Message is contains the SQS message, and is passed down to the Handler
+// when the Poller is running.
+type Message struct {
+	*sqs.ReceiveMessageOutput
+	client *sqs.SQS
+}
 
 // Poller is an instance of the polling framework, it contains
 // the SQS client and provides a simple API for polling an SQS
@@ -15,7 +25,6 @@ type Poller struct {
 	client *sqs.SQS
 
 	Interval time.Duration // time interval between each poll request - default: 10s.
-
 
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
@@ -39,11 +48,6 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 	return &p
 }
 
-
-// Handler is function which handles the incoming SQS
-// message.
-type Handler func(ctx context.Context, message *sqs.ReceiveMessageOutput, err error) error
-
 // Handle attaches a Handler to the Poller instance, if a Handler already
 // exists on the Poller instance, it will be replaced.
 func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
@@ -62,7 +66,7 @@ func (p *Poller) StartPolling() error {
 
 	for {
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
-		if err := p.handler(ctx, out, err); err != nil {
+		if err := p.handler(ctx, &Message{ReceiveMessageOutput:out}, err); err != nil {
 			return &Error{
 				OriginalError: err,
 				Meta:          nil,

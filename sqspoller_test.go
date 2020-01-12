@@ -81,7 +81,7 @@ func TestPoller(t *testing.T) {
 
 	confirmedRunning := errors.New("started and exited")
 
-	handler := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+	handler := func(ctx context.Context, msg *sqspoller.Message, err error) error {
 		if *msg.Messages[0].Body != messageBody {
 			t.Fatalf("received message body: %v, wanted: %v", *msg.Messages[0].Body, messageBody)
 		}
