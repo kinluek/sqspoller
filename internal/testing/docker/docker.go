@@ -19,7 +19,6 @@ type Container struct {
 	Volumes      []string
 }
 
-
 type Port struct {
 	HostIP   string `json:"HostIp"`
 	HostPort string `json:"HostPort"`
