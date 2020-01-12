@@ -10,6 +10,7 @@ jobs:
       - checkout:
       - run: pwd
       - run: ls
+      - run: make NETWORK=test dockertest
 #      - run: docker run --privileged -it docker:dind
 #      - run: go test -v ./...
 workflows:
