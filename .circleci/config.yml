@@ -6,6 +6,7 @@ jobs:
     working_directory: /go/src/github.com/mirrorweb/dora-go
     steps:
       - checkout:
+      - run: docker run --privileged -it docker:dind
       - run: go test -v ./...
 workflows:
   version: 2
