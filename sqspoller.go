@@ -24,7 +24,9 @@ type Message struct {
 type Poller struct {
 	client *sqs.SQS
 
-	Interval time.Duration // time interval between each poll request - default: 10s.
+	Interval          time.Duration // Time interval between each poll request - default: 10s.
+	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
+	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
 
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
@@ -62,10 +64,19 @@ func (p *Poller) StartPolling() error {
 		return &Error{Message: "no handler detected: please provide a handler."}
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	if p.AllowTimeout {
+		ctx, cancel = context.WithTimeout(ctx, p.TimeoutNoMessages)
+	}
 
 	for {
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
+
+		if p.AllowTimeout && len(out.Messages) > 0 {
+			ctx, cancel = context.WithTimeout(ctx, p.TimeoutNoMessages)
+		}
+
 		if err := p.handler(ctx, &Message{out, p.client}, err); err != nil {
 			return &Error{
 				OriginalError: err,
@@ -74,6 +85,7 @@ func (p *Poller) StartPolling() error {
 			}
 		}
 	}
+	defer cancel()
 
 	return nil
 }

@@ -14,8 +14,10 @@ import (
 	"time"
 )
 
-
-func TestPoller(t *testing.T) {
+// setupSQS will setup the SQS container and return when it is ready
+// to be interacted with. A teardown function is also returned and it's
+// execution should be deferred.
+func setupSQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	testEnv := os.Getenv("ENVIRONMENT")
 
 	// ==============================================================
@@ -27,10 +29,9 @@ func TestPoller(t *testing.T) {
 		"DATA_DIR":    "/tmp/localstack/data",
 		"DOCKER_HOST": "unix:///var/run/docker.sock",
 	}, os.Getenv("TMPDIR"))
-	defer container.Cleanup()
 
 	endPoint := "http://localhost:" + container.ExposedPorts["4576"][0].HostPort
-	
+
 	if testEnv == "CI" {
 
 		// if the container has been started in a CI environment
@@ -59,7 +60,7 @@ func TestPoller(t *testing.T) {
 	// Keep retrying as local AWS environment will take time to be ready.
 
 	queueName := "test-queue"
-	var queueURL *string
+	var qURL *string
 
 	limitSecs := 20
 	for i := 0; i < limitSecs; i++ {
@@ -68,14 +69,24 @@ func TestPoller(t *testing.T) {
 		})
 		if err == nil {
 			t.Log("queue created: ", *result.QueueUrl)
-			queueURL = result.QueueUrl
+			qURL = result.QueueUrl
 			break
 		}
 		time.Sleep(time.Second)
 	}
-	if queueURL == nil {
+	if qURL == nil {
 		t.Fatalf("failed to create queue in under %v seconds", limitSecs)
 	}
+
+	return svc, qURL, container.Cleanup
+}
+
+func TestPoller(t *testing.T) {
+	svc, queueURL, teardown := setupSQS(t)
+	defer teardown()
+
+	// ==============================================================
+	// Send message to SQS queue.
 
 	messageBody := "message-body"
 
@@ -83,9 +94,12 @@ func TestPoller(t *testing.T) {
 		QueueUrl:    queueURL,
 		MessageBody: aws.String(messageBody),
 	})
+	if err != nil {
+		t.Fatalf("failed to send message to SQS: %v", err)
+	}
 
 	// ==============================================================
-	// Create new poller using local queue
+	// Create new poller using local queue.
 
 	poller := sqspoller.New(svc, sqs.ReceiveMessageInput{
 		QueueUrl: queueURL,
@@ -99,13 +113,16 @@ func TestPoller(t *testing.T) {
 	confirmedRunning := errors.New("started and exited")
 
 	handler := func(ctx context.Context, msg *sqspoller.Message, err error) error {
-		if *msg.Messages[0].Body != messageBody {
-			t.Fatalf("received message body: %v, wanted: %v", *msg.Messages[0].Body, messageBody)
+		if len(msg.Messages) > 0 {
+			if *msg.Messages[0].Body != messageBody {
+				t.Fatalf("received message body: %v, wanted: %v", *msg.Messages[0].Body, messageBody)
+			}
+			if *msg.Messages[0].MessageId != *sendResp.MessageId {
+				t.Fatalf("received message ID: %v, wanted: %v", *msg.Messages[0].MessageId, *sendResp.MessageId)
+			}
+			return confirmedRunning
 		}
-		if *msg.Messages[0].MessageId != *sendResp.MessageId {
-			t.Fatalf("received message ID: %v, wanted: %v", *msg.Messages[0].MessageId, *sendResp.MessageId)
-		}
-		return confirmedRunning
+		return nil
 	}
 
 	poller.Handle(handler)

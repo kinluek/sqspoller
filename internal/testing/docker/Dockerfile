@@ -2,6 +2,8 @@
 # bind docker sockets on start up, to connect host docker to container docker.
 FROM golang:1.13-alpine
 
+MAINTAINER Si Chan <github.com/kinluek>
+
 WORKDIR /go/code
 
 RUN apk add docker
