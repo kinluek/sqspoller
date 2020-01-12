@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// Handler is function which handles the incoming SQS
-// message.
-type Handler func(ctx context.Context, message *sqs.ReceiveMessageOutput, err error) error
 
 // Poller is an instance of the polling framework, it contains
 // the SQS client and provides a simple API for polling an SQS
@@ -18,6 +15,7 @@ type Poller struct {
 	client *sqs.SQS
 
 	Interval time.Duration // time interval between each poll request - default: 10s.
+
 
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
@@ -40,6 +38,11 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 	}
 	return &p
 }
+
+
+// Handler is function which handles the incoming SQS
+// message.
+type Handler func(ctx context.Context, message *sqs.ReceiveMessageOutput, err error) error
 
 // Handle attaches a Handler to the Poller instance, if a Handler already
 // exists on the Poller instance, it will be replaced.

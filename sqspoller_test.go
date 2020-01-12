@@ -31,7 +31,7 @@ func TestPoller(t *testing.T) {
 	// Setup SQS client using AWS SDK
 
 	sqsHostPort := container.ExposedPorts["4576"][0].HostPort
-	endPoint := "http://localhost:"+sqsHostPort
+	endPoint := "http://localhost:" + sqsHostPort
 
 	sess := session.Must(session.NewSession(&aws.Config{
 		Credentials: credentials.AnonymousCredentials,
@@ -60,6 +60,13 @@ func TestPoller(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
+	messageBody := "message-body"
+
+	sendResp, err := svc.SendMessage(&sqs.SendMessageInput{
+		QueueUrl:    queueURL,
+		MessageBody: aws.String(messageBody),
+	})
+
 	// ==============================================================
 	// Create new poller using local queue
 
@@ -68,19 +75,24 @@ func TestPoller(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Attach Handler that a known value
+	// Attach Handler and Start Polling.
+	// Assert that the correct message is received and that the correct
+	// error is returned.
 
 	confirmedRunning := errors.New("started and exited")
+
 	handler := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+		if *msg.Messages[0].Body != messageBody {
+			t.Fatalf("received message body: %v, wanted: %v", *msg.Messages[0].Body, messageBody)
+		}
+		if *msg.Messages[0].MessageId != *sendResp.MessageId {
+			t.Fatalf("received message ID: %v, wanted: %v", *msg.Messages[0].MessageId, *sendResp.MessageId)
+		}
 		return confirmedRunning
 	}
 
-	// ==============================================================
-	// Start Polling and assert that the known value is returned
-	// to confirm that the poller runs as expected.
-
 	poller.Handle(handler)
-	err := poller.StartPolling()
+	err = poller.StartPolling()
 
 	pollErr := err.(*sqspoller.Error)
 	if pollErr.OriginalError != confirmedRunning {
