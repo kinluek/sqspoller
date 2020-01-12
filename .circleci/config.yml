@@ -1,0 +1,10 @@
+version: 2
+jobs:
+  test:
+    docker:
+      - image: circleci/golang:latest
+    working_directory: /go/src/github.com/mirrorweb/dora-go
+    steps:
+      - checkout:
+      - run: docker version
+      - run: go test -v ./...
