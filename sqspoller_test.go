@@ -29,10 +29,8 @@ func TestPoller(t *testing.T) {
 	}, os.Getenv("TMPDIR"))
 	defer container.Cleanup()
 
-	sqsHostPort := container.ExposedPorts["4576"][0].HostPort
-	endPoint := "http://localhost:" + sqsHostPort
-
-
+	endPoint := "http://localhost:" + container.ExposedPorts["4576"][0].HostPort
+	
 	if testEnv == "CI" {
 
 		// if the container has been started in a CI environment
@@ -40,6 +38,9 @@ func TestPoller(t *testing.T) {
 		// we need to connect it to the same docker network as the
 		// application container to interact with it.
 		docker.NetworkConnect(t, os.Getenv("DOCKER_NETWORK"), container.ID)
+
+		// first 12 characters of the container ID will be used
+		// as an alias when adding to the network.
 		endPoint = "http://" + container.ID[:12] + ":" + "4576"
 	}
 
