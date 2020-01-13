@@ -77,11 +77,12 @@ func (p *Poller) StartPolling() error {
 	timeout := time.After(p.TimeoutNoMessages)
 poll:
 	for {
+		//======================================================================
+		// Make message receive request
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
 		//======================================================================
 		// Set times
-
 		interval := time.After(p.Interval)
 		if len(out.Messages) > 0 {
 			timeout = time.After(p.TimeoutNoMessages)
@@ -89,7 +90,6 @@ poll:
 
 		//======================================================================
 		// Handler is called here
-
 		if err := p.handler(ctx, messageOutput(out, p.client, p.QueueURL), err); err != nil {
 			return &Error{
 				OriginalError: err,
@@ -99,7 +99,6 @@ poll:
 
 		//======================================================================
 		// Handle intervals and timeouts
-
 		for {
 			select {
 			case <-interval:
