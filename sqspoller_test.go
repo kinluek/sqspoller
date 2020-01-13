@@ -52,13 +52,13 @@ func TestPoller(t *testing.T) {
 
 		confirmedRunning := errors.New("started and exited")
 
-		handler := func(ctx context.Context, msg *sqspoller.Message, err error) error {
-			if len(msg.Messages) > 0 {
-				if *msg.Messages[0].Body != messageBody {
-					t.Fatalf("received message body: %v, wanted: %v", *msg.Messages[0].Body, messageBody)
+		handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+			if len(msgOut.Messages) > 0 {
+				if *msgOut.Messages[0].Body != messageBody {
+					t.Fatalf("received message body: %v, wanted: %v", *msgOut.Messages[0].Body, messageBody)
 				}
-				if *msg.Messages[0].MessageId != *sendResp.MessageId {
-					t.Fatalf("received message ID: %v, wanted: %v", *msg.Messages[0].MessageId, *sendResp.MessageId)
+				if *msgOut.Messages[0].MessageId != *sendResp.MessageId {
+					t.Fatalf("received message ID: %v, wanted: %v", *msgOut.Messages[0].MessageId, *sendResp.MessageId)
 				}
 				return confirmedRunning
 			}
@@ -93,7 +93,7 @@ func TestPoller(t *testing.T) {
 		// ==============================================================
 		// Start Polling with no messages to be received
 
-		handler := func(ctx context.Context, msg *sqspoller.Message, err error) error {
+		handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
 			return nil
 		}
 
@@ -140,13 +140,10 @@ func TestPoller(t *testing.T) {
 
 		var messagesReceived int64
 
-		handler := func(ctx context.Context, msg *sqspoller.Message, err error) error {
-			if len(msg.Messages) > 0 {
+		handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+			if len(msgOut.Messages) > 0 {
 				atomic.AddInt64(&messagesReceived, 1)
-				_, err := svc.DeleteMessage(&sqs.DeleteMessageInput{
-					QueueUrl:      queueURL,
-					ReceiptHandle: msg.Messages[0].ReceiptHandle,
-				})
+				_, err :=  msgOut.Messages[0].Delete()
 				return err
 			}
 			return nil
