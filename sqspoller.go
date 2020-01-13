@@ -2,21 +2,20 @@ package sqspoller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"time"
 )
 
+var (
+	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
+)
+
 // Handler is function which handles the incoming SQS
 // message.
-type Handler func(ctx context.Context, message *Message, err error) error
-
-// Message is contains the SQS message, and is passed down to the Handler
-// when the Poller is running.
-type Message struct {
-	*sqs.ReceiveMessageOutput
-	client *sqs.SQS
-}
+type Handler func(ctx context.Context, msgOutput *MessageOutput, err error) error
 
 // Poller is an instance of the polling framework, it contains
 // the SQS client and provides a simple API for polling an SQS
@@ -24,7 +23,11 @@ type Message struct {
 type Poller struct {
 	client *sqs.SQS
 
-	Interval time.Duration // time interval between each poll request - default: 10s.
+	QueueURL string
+
+	Interval          time.Duration // Time interval between each poll request - default: 10s.
+	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
+	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
 
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
@@ -39,7 +42,10 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 	p := Poller{
 		client: sqsSvc,
 
-		Interval: 10 * time.Second,
+		QueueURL: *config.QueueUrl,
+
+		Interval:     10 * time.Second,
+		AllowTimeout: false,
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -64,19 +70,52 @@ func (p *Poller) StartPolling() error {
 
 	ctx := context.Background()
 
+	timeout := time.After(p.TimeoutNoMessages)
+poll:
 	for {
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
-		if err := p.handler(ctx, &Message{out, p.client}, err); err != nil {
+
+		//======================================================================
+		// Set times
+
+		interval := time.After(p.Interval)
+		if len(out.Messages) > 0 {
+			timeout = time.After(p.TimeoutNoMessages)
+		}
+
+		//======================================================================
+		// Handler is called here
+
+		if err := p.handler(ctx, messageOutput(out, p.client, p.QueueURL), err); err != nil {
 			return &Error{
 				OriginalError: err,
 				Meta:          nil,
 				Message:       err.Error(),
 			}
 		}
-	}
 
+		//======================================================================
+		// Handle intervals and timeouts
+
+		for {
+			select {
+			case <-interval:
+				continue poll
+			case <-timeout:
+				if p.AllowTimeout {
+					return &Error{
+						OriginalError: ErrTimeoutNoMessages,
+						Meta:          nil,
+						Message:       fmt.Sprintf("%v: %v", ErrTimeoutNoMessages, p.TimeoutNoMessages),
+					}
+				}
+			}
+		}
+
+	}
 	return nil
 }
+
 
 // Error is the frameworks custom error type.
 type Error struct {
