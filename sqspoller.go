@@ -99,16 +99,14 @@ poll:
 
 		//======================================================================
 		// Handle intervals and timeouts
-		for {
-			select {
-			case <-interval:
-				continue poll
-			case <-timeout:
-				if p.AllowTimeout {
-					return &Error{
-						OriginalError: ErrTimeoutNoMessages,
-						Message:       fmt.Sprintf("%v: %v", ErrTimeoutNoMessages, p.TimeoutNoMessages),
-					}
+		select {
+		case <-interval:
+			continue poll
+		case <-timeout:
+			if p.AllowTimeout {
+				return &Error{
+					OriginalError: ErrTimeoutNoMessages,
+					Message:       fmt.Sprintf("%v: %v", ErrTimeoutNoMessages, p.TimeoutNoMessages),
 				}
 			}
 		}
