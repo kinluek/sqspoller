@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	ErrNoHandler         = errors.New("ErrNoHandler: no handler set on Poller instance")
 	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
 )
 
@@ -65,7 +66,10 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 // StartPolling starts the poller.
 func (p *Poller) StartPolling() error {
 	if p.handler == nil {
-		return &Error{Message: "no handler detected: please provide a handler."}
+		return &Error{
+			OriginalError: ErrNoHandler,
+			Message:       ErrNoHandler.Error(),
+		}
 	}
 
 	ctx := context.Background()
@@ -89,7 +93,6 @@ poll:
 		if err := p.handler(ctx, messageOutput(out, p.client, p.QueueURL), err); err != nil {
 			return &Error{
 				OriginalError: err,
-				Meta:          nil,
 				Message:       err.Error(),
 			}
 		}
@@ -105,7 +108,6 @@ poll:
 				if p.AllowTimeout {
 					return &Error{
 						OriginalError: ErrTimeoutNoMessages,
-						Meta:          nil,
 						Message:       fmt.Sprintf("%v: %v", ErrTimeoutNoMessages, p.TimeoutNoMessages),
 					}
 				}
@@ -115,7 +117,6 @@ poll:
 	}
 	return nil
 }
-
 
 // Error is the frameworks custom error type.
 type Error struct {
