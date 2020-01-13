@@ -19,11 +19,10 @@ import (
 
 func TestPoller(t *testing.T) {
 
-	t.Run("basic polling", func(t *testing.T) {
-		t.Parallel()
+	svc, queueURL, teardown := setupSQS(t)
+	defer teardown()
 
-		svc, queueURL, teardown := setupSQS(t)
-		defer teardown()
+	t.Run("basic polling", func(t *testing.T) {
 
 		// ==============================================================
 		// Send message to SQS queue.
@@ -60,6 +59,10 @@ func TestPoller(t *testing.T) {
 				if *msgOut.Messages[0].MessageId != *sendResp.MessageId {
 					t.Fatalf("received message ID: %v, wanted: %v", *msgOut.Messages[0].MessageId, *sendResp.MessageId)
 				}
+				if _, err :=  msgOut.Messages[0].Delete(); err != nil {
+					return err
+				}
+
 				return confirmedRunning
 			}
 			return nil
@@ -75,11 +78,6 @@ func TestPoller(t *testing.T) {
 	})
 
 	t.Run("timeout no messages received", func(t *testing.T) {
-		t.Parallel()
-
-		svc, queueURL, teardown := setupSQS(t)
-		defer teardown()
-
 		// ==============================================================
 		// Create new poller and configure Timeouts
 
@@ -107,10 +105,6 @@ func TestPoller(t *testing.T) {
 	})
 
 	t.Run("timeout after receiving a few messages, then none after", func(t *testing.T) {
-		t.Parallel()
-
-		svc, queueURL, teardown := setupSQS(t)
-		defer teardown()
 
 		// ==============================================================
 		// Create new poller and configure Timeouts
