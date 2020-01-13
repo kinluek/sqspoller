@@ -45,10 +45,16 @@ func messageOutput(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string) 
 	}
 }
 
+// DeleteMessageOutput wraps the sqs.DeleteMessageOutput output
+type DeleteMessageOutput struct {
+	*sqs.DeleteMessageOutput
+}
+
 // Delete removes the message from the queue, permanently.
-func (m *Message) Delete() (*sqs.DeleteMessageOutput, error) {
-	return m.client.DeleteMessage(&sqs.DeleteMessageInput{
+func (m *Message) Delete() (*DeleteMessageOutput, error) {
+	out, err := m.client.DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(m.queueURL),
 		ReceiptHandle: m.ReceiptHandle,
 	})
+	return &DeleteMessageOutput{out}, err
 }
