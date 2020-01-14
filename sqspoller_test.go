@@ -3,6 +3,7 @@ package sqspoller_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -36,6 +37,8 @@ type PollerTests struct {
 func (p *PollerTests) BasicPolling(t *testing.T) {
 	// ==============================================================
 	// Send message to SQS queue.
+
+	fmt.Println("BASIC")
 
 	messageBody := "message-body"
 
@@ -72,17 +75,15 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 			if _, err := msgOut.Messages[0].Delete(); err != nil {
 				return err
 			}
-
 			return confirmedRunning
 		}
-		return nil
+		return confirmedRunning
 	}
 
 	poller.Handle(handler)
-	err = poller.StartPolling()
 
-	pollErr := err.(*sqspoller.Error)
-	if pollErr.OriginalError != confirmedRunning {
+	err = poller.StartPolling()
+	if err != confirmedRunning {
 		t.Fatalf("could not run poller: %v", err)
 	}
 }
@@ -105,11 +106,10 @@ func (p *PollerTests) TimeoutNoMessages(t *testing.T) {
 	}
 
 	poller.Handle(handler)
-	err := poller.StartPolling()
 
-	pollErr := err.(*sqspoller.Error)
-	if pollErr.OriginalError != sqspoller.ErrTimeoutNoMessages {
-		t.Fatalf("could not run poller: %v", pollErr)
+	err := poller.StartPolling()
+	if err != sqspoller.ErrTimeoutNoMessages {
+		t.Fatalf("could not run poller: %v", err)
 	}
 }
 
@@ -154,9 +154,8 @@ func (p *PollerTests) TimeoutAfterSeveralMessages(t *testing.T) {
 	poller.Handle(handler)
 	err := poller.StartPolling()
 
-	pollErr := err.(*sqspoller.Error)
-	if pollErr.OriginalError != sqspoller.ErrTimeoutNoMessages {
-		t.Fatalf("could not run poller: %v", pollErr)
+	if err != sqspoller.ErrTimeoutNoMessages {
+		t.Fatalf("could not run poller: %v", err)
 	}
 
 	if messagesReceived != 4 {

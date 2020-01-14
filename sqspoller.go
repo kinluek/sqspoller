@@ -3,7 +3,6 @@ package sqspoller
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"time"
@@ -26,7 +25,7 @@ type Poller struct {
 
 	QueueURL string
 
-	Interval          time.Duration // Time interval between each poll request - default: 10s.
+	Interval          time.Duration // Time interval between each poll request.
 	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
 	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
 
@@ -40,12 +39,12 @@ type Poller struct {
 // of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
 // SQS queue will be polled.
 func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
+
 	p := Poller{
 		client: sqsSvc,
 
 		QueueURL: *config.QueueUrl,
 
-		Interval:     10 * time.Second,
 		AllowTimeout: false,
 
 		receiveMsgInput: &config,
@@ -66,49 +65,51 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 // StartPolling starts the poller.
 func (p *Poller) StartPolling() error {
 	if p.handler == nil {
-		return &Error{
-			OriginalError: ErrNoHandler,
-			Message:       ErrNoHandler.Error(),
-		}
+		return ErrNoHandler
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	timeout := time.After(p.TimeoutNoMessages)
-poll:
+polling:
 	for {
 		//======================================================================
 		// Make message receive request
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
 		//======================================================================
-		// Set times
-		interval := time.After(p.Interval)
+		// Reset TimeoutNoMessages
 		if len(out.Messages) > 0 {
 			timeout = time.After(p.TimeoutNoMessages)
 		}
 
-		//======================================================================
-		// Handler is called here
-		if err := p.handler(ctx, messageOutput(out, p.client, p.QueueURL), err); err != nil {
-			return &Error{
-				OriginalError: err,
-				Message:       err.Error(),
-			}
-		}
+		handlerError := make(chan error)
 
 		//======================================================================
-		// Handle intervals and timeouts
-		select {
-		case <-interval:
-			continue poll
-		case <-timeout:
-			if p.AllowTimeout {
-				return &Error{
-					OriginalError: ErrTimeoutNoMessages,
-					Message:       fmt.Sprintf("%v: %v", ErrTimeoutNoMessages, p.TimeoutNoMessages),
-				}
+		// Handler is called here
+		go func() {
+			if err := p.handler(ctx, messageOutput(out, p.client, p.QueueURL), err); err != nil {
+				handlerError <- err
+				return
 			}
+			handlerError <- nil
+		}()
+
+		//======================================================================
+		// Wait for handler to finish
+		if !p.AllowTimeout {
+			if err := wait(ctx, handlerError, p.Interval); err != nil {
+				return err
+			}
+			continue polling
+		}
+
+		if p.AllowTimeout {
+			if err := waitWithTimeout(ctx, handlerError, p.Interval, timeout); err != nil {
+				return err
+			}
+			continue polling
 		}
 
 	}
