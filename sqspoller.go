@@ -102,14 +102,14 @@ polling:
 		//======================================================================
 		// Wait for handler to finish
 		if !p.AllowTimeout {
-			if err := wait(ctx, handlingMessage, handlerError, p.Interval); err != nil {
+			if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
 				return err
 			}
 			continue polling
 		}
 
 		if p.AllowTimeout {
-			if err := waitWithTimeout(ctx, handlingMessage,handlerError, p.Interval, timeout); err != nil {
+			if err := waitForSignalsWithTimeout(ctx, handlerError, p.Interval, handlingMessage, timeout); err != nil {
 				return err
 			}
 			if handlingMessage {

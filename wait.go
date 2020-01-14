@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-func wait(ctx context.Context, handlingMsg bool, handlerError chan error, interval time.Duration) error {
+// waitForSignals knows how to handle signals coming from the handler
+// channel, context cancellations and poll time intervals.
+func waitForSignals(ctx context.Context, handlerError chan error, interval time.Duration) error {
 	//======================================================================
 	// Wait for handler to return
 	select {
@@ -18,7 +20,7 @@ func wait(ctx context.Context, handlingMsg bool, handlerError chan error, interv
 	}
 
 	//======================================================================
-	// Set wait time to next poll
+	// Set waitForSignals time to next poll
 	nextPoll := time.After(interval)
 
 	//======================================================================
@@ -31,7 +33,9 @@ func wait(ctx context.Context, handlingMsg bool, handlerError chan error, interv
 	}
 }
 
-func waitWithTimeout(ctx context.Context, handlingMsg bool, handlerError chan error, interval time.Duration, timedOut <-chan time.Time) error {
+// waitForSignalsWithTimeout knows how to handle signals coming from the handler
+// channel, context cancellations, poll time intervals and timeouts.
+func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, interval time.Duration, handlingMsg bool, timedOut <-chan time.Time) error {
 
 	//======================================================================
 	// Wait for handler to return
@@ -53,7 +57,7 @@ func waitWithTimeout(ctx context.Context, handlingMsg bool, handlerError chan er
 	}
 
 	//======================================================================
-	// Set wait time to next poll
+	// Set waitForSignals time to next poll
 	nextPoll := time.After(interval)
 
 	//======================================================================
