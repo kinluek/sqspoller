@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"sync"
 	"time"
 )
 
@@ -25,9 +26,12 @@ type Poller struct {
 
 	QueueURL string
 
-	Interval          time.Duration // Time interval between each poll request.
 	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
 	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
+	TimeoutShutdown   time.Duration // Poller will try to shutdown gracefully up to this time limit, where the poller will exit regardless of what's happening.
+	Interval          time.Duration // Time interval between each poll request.
+
+	shutdown chan struct{} // channel to send shutdown signal on
 
 	handler         Handler
 	middleware      []Middleware
@@ -47,6 +51,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 		QueueURL: *config.QueueUrl,
 
 		AllowTimeout: false,
+
+		TimeoutShutdown: 5 * time.Second,
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -72,7 +78,47 @@ func (p *Poller) StartPolling() error {
 	}
 
 	ctx, cancel := context.WithCancel(p.ctx)
-	defer cancel()
+
+	pollingErrors := make(chan error)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go p.poll(ctx, &wg, pollingErrors)
+
+polling:
+	for {
+		select {
+		case err := <-pollingErrors:
+			if err != nil {
+				return err
+			}
+		case <-p.shutdown:
+			cancel()
+			break polling
+		}
+
+	}
+
+	// collect final error if one was sent during
+	// the shutdown process
+	select {
+	case err := <-pollingErrors:
+		if err != nil {
+			return err
+		}
+	default:
+	}
+
+	// wait for poll to finish handling current event
+	// before exiting the program.
+	wg.Wait()
+
+	return nil
+}
+
+func (p *Poller) poll(ctx context.Context, wg *sync.WaitGroup, errorChan chan<- error) {
+	defer wg.Done()
 
 	timeout := time.After(p.TimeoutNoMessages)
 
@@ -103,14 +149,16 @@ polling:
 		// Wait for handler to finish
 		if !p.AllowTimeout {
 			if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
-				return err
+				errorChan <- err
+				return
 			}
 			continue polling
 		}
 
 		if p.AllowTimeout {
 			if err := waitForSignalsWithTimeout(ctx, handlerError, p.Interval, handlingMessage, timeout); err != nil {
-				return err
+				errorChan <- err
+				return
 			}
 			if handlingMessage {
 				timeout = time.After(p.TimeoutNoMessages)
@@ -119,7 +167,6 @@ polling:
 		}
 
 	}
-	return nil
 }
 
 // Error is the frameworks custom error type.

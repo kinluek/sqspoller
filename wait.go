@@ -16,6 +16,9 @@ func waitForSignals(ctx context.Context, handlerError chan error, interval time.
 			return err
 		}
 	case <-ctx.Done():
+		if err := <-handlerError; err != nil {
+			return err
+		}
 		return ctx.Err()
 	}
 
@@ -29,7 +32,7 @@ func waitForSignals(ctx context.Context, handlerError chan error, interval time.
 	case <-nextPoll:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil
 	}
 }
 
@@ -45,8 +48,7 @@ func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, int
 			return err
 		}
 	case <-timedOut:
-		err := <-handlerError
-		if err != nil {
+		if err := <-handlerError; err != nil {
 			return err
 		}
 		if !handlingMsg {
