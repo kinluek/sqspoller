@@ -25,9 +25,9 @@ type Message struct {
 	queueURL string
 }
 
-// messageOutput transforms an sqs.ReceiveMessageOutput to
+// convertMessage converts an sqs.ReceiveMessageOutput to
 // sqspoller.MessageOutput.
-func messageOutput(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string) *MessageOutput {
+func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string) *MessageOutput {
 	messages := make([]*Message, 0)
 	for _, msg := range msgOut.Messages {
 		message := Message{

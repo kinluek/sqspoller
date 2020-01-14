@@ -26,6 +26,7 @@ func TestPoller(t *testing.T) {
 	t.Run("basic polling", tests.BasicPolling)
 	t.Run("timeout - no messages to receive", tests.TimeoutNoMessages)
 	t.Run("timeout - after several messages", tests.TimeoutAfterSeveralMessages)
+	t.Run("timeout - reset if timeout happened during message handling", tests.TimeoutResetIfHandlingMessage)
 }
 
 // PollerTests holds the tests for the Poller
@@ -146,7 +147,10 @@ func (p *PollerTests) TimeoutAfterSeveralMessages(t *testing.T) {
 		if len(msgOut.Messages) > 0 {
 			atomic.AddInt64(&messagesReceived, 1)
 			_, err := msgOut.Messages[0].Delete()
-			return err
+			if err != nil {
+				t.Fatalf("could not delete message: %v", err)
+			}
+			return nil
 		}
 		return nil
 	}
@@ -159,6 +163,65 @@ func (p *PollerTests) TimeoutAfterSeveralMessages(t *testing.T) {
 	}
 
 	if messagesReceived != 4 {
+		t.Fatalf("expected to receive %v messages, got %v", 4, messagesReceived)
+	}
+}
+
+func (p *PollerTests) TimeoutResetIfHandlingMessage(t *testing.T) {
+	// ==============================================================
+	// Create new poller and configure Timeouts
+
+	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+		QueueUrl:        p.queueURL,
+		WaitTimeSeconds: aws.Int64(2),
+	})
+
+	timeout := time.Second
+	poller.ExitAfterNoMessagesReceivedFor(timeout)
+	poller.SetInterval(0)
+
+	// ==============================================================
+	// Pre-fill Queue with a single message
+
+	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
+		QueueUrl:    p.queueURL,
+		MessageBody: aws.String("message"),
+	})
+	if err != nil {
+		t.Fatalf("failed to send message to SQS: %v", err)
+	}
+
+	var messagesReceived int
+
+	confirmed := errors.New("confirmed poller did not timeout after first message")
+
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		if messagesReceived == 1 {
+			return confirmed
+		}
+
+		if len(msgOut.Messages) > 0 {
+			time.Sleep(2*timeout)
+
+			messagesReceived++
+			_, err := msgOut.Messages[0].Delete()
+			if err != nil {
+				t.Fatalf("could not delete message: %v", err)
+			}
+			return nil
+		}
+
+		return nil
+	}
+
+	poller.Handle(handler)
+	err = poller.StartPolling()
+
+	if err != confirmed {
+		t.Fatalf("poller errored out: %v", err)
+	}
+
+	if messagesReceived != 1 {
 		t.Fatalf("expected to receive %v messages, got %v", 4, messagesReceived)
 	}
 }

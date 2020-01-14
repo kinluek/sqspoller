@@ -29,17 +29,18 @@ type Poller struct {
 	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
 	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
 
-	receiveMsgInput *sqs.ReceiveMessageInput
-	options         []request.Option
 	handler         Handler
 	middleware      []Middleware
+	receiveMsgInput *sqs.ReceiveMessageInput
+	options         []request.Option
+
+	ctx context.Context
 }
 
 // New creates a new instance of the SQS Poller from an instance
 // of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
 // SQS queue will be polled.
 func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
-
 	p := Poller{
 		client: sqsSvc,
 
@@ -50,6 +51,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 		receiveMsgInput: &config,
 		options:         options,
 		middleware:      make([]Middleware, 0),
+
+		ctx: context.Background(),
 	}
 	return &p
 }
@@ -68,20 +71,20 @@ func (p *Poller) StartPolling() error {
 		return ErrNoHandler
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(p.ctx)
 	defer cancel()
 
 	timeout := time.After(p.TimeoutNoMessages)
+
 polling:
 	for {
+		var handlingMessage bool
 		//======================================================================
 		// Make message receive request
 		out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-		//======================================================================
-		// Reset TimeoutNoMessages
 		if len(out.Messages) > 0 {
-			timeout = time.After(p.TimeoutNoMessages)
+			handlingMessage = true
 		}
 
 		handlerError := make(chan error)
@@ -89,7 +92,7 @@ polling:
 		//======================================================================
 		// Handler is called here
 		go func() {
-			if err := p.handler(ctx, messageOutput(out, p.client, p.QueueURL), err); err != nil {
+			if err := p.handler(ctx, convertMessage(out, p.client, p.QueueURL), err); err != nil {
 				handlerError <- err
 				return
 			}
@@ -99,18 +102,22 @@ polling:
 		//======================================================================
 		// Wait for handler to finish
 		if !p.AllowTimeout {
-			if err := wait(ctx, handlerError, p.Interval); err != nil {
+			if err := wait(ctx, handlingMessage, handlerError, p.Interval); err != nil {
 				return err
 			}
 			continue polling
 		}
 
 		if p.AllowTimeout {
-			if err := waitWithTimeout(ctx, handlerError, p.Interval, timeout); err != nil {
+			if err := waitWithTimeout(ctx, handlingMessage,handlerError, p.Interval, timeout); err != nil {
 				return err
+			}
+			if handlingMessage {
+				timeout = time.After(p.TimeoutNoMessages)
 			}
 			continue polling
 		}
+		close(handlerError)
 
 	}
 	return nil
