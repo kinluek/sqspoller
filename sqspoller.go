@@ -117,7 +117,6 @@ polling:
 			}
 			continue polling
 		}
-		close(handlerError)
 
 	}
 	return nil
