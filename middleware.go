@@ -33,21 +33,3 @@ func wrapMiddleware(middleware []Middleware, handler Handler) Handler {
 	return handler
 }
 
-
-//func Context() Middleware {
-//	f := func(handler Handler) Handler {
-//		h := func(ctx context.Context, msg *MessageOutput, err error) error {
-//			select {
-//			case <-ctx.Done():
-//				return ctx.Err()
-//			default:
-//				if err := handler(ctx, msg, err); err != nil {
-//					return err
-//				}
-//				return nil
-//			}
-//		}
-//		return h
-//	}
-//	return f
-//}
