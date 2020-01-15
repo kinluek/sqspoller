@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -16,12 +17,12 @@ var (
 
 // ctxKey is the package's context key type used to store
 // values on context.Context object to avoid clashing
-// with other packages,
+// with other packages.
 type ctxKey int
 
 // CtxKey is the package's context key used to store
 // values on context.Context object to avoid clashing with
-// other packages,
+// other packages.
 const CtxKey ctxKey = 1
 
 // CtxValues represents the values stored on the context
@@ -30,6 +31,13 @@ const CtxKey ctxKey = 1
 type CtxValues struct {
 	TraceID string
 	Now     time.Time
+}
+
+func newCtxValues(traceID string, t time.Time) *CtxValues {
+	return &CtxValues{
+		TraceID: traceID,
+		Now:     t,
+	}
 }
 
 // Handler is function which handles the incoming SQS
@@ -159,6 +167,8 @@ func (p *Poller) poll(ctx context.Context) chan error {
 			if len(out.Messages) > 0 {
 				handlingMessage = true
 			}
+
+			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
 			//======================================================================
 			// Call Handler with message request results.
