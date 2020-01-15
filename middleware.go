@@ -1,5 +1,7 @@
 package sqspoller
 
+import "context"
+
 // Middleware is a function which that wraps a Handler
 // to add functionality before or after the Handler code.
 type Middleware func(Handler) Handler
@@ -32,4 +34,29 @@ func wrapMiddleware(middleware []Middleware, handler Handler) Handler {
 
 	return handler
 }
+
+
+// IgnoreEmptyResponses stops the data from being passed down
+// to the inner handler, if there is no message to be handled.
+func IgnoreEmptyResponses() Middleware {
+	f := func(handler Handler) Handler {
+
+		// new handler
+		h := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+
+			// validate messages exist, if no messages exist, do
+			// not pass down the output and return nil
+			if err == nil && len(msgOutput.Messages) == 0 || msgOutput.Messages == nil  {
+				return nil
+			}
+
+			return handler(ctx, msgOutput, err)
+		}
+
+		return h
+	}
+
+	return f
+}
+
 
