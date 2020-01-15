@@ -14,6 +14,24 @@ var (
 	ErrIntegrityIssue    = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
+// ctxKey is the package's context key type used to store
+// values on context.Context object to avoid clashing
+// with other packages,
+type ctxKey int
+
+// CtxKey is the package's context key used to store
+// values on context.Context object to avoid clashing with
+// other packages,
+const CtxKey ctxKey = 1
+
+// CtxValues represents the values stored on the context
+// object which is passed down through the handler function
+// and middleware.
+type CtxValues struct {
+	TraceID string
+	Now     time.Time
+}
+
 // Handler is function which handles the incoming SQS
 // message.
 type Handler func(ctx context.Context, msgOutput *MessageOutput, err error) error
