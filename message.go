@@ -28,10 +28,10 @@ type Message struct {
 // convertMessage converts an sqs.ReceiveMessageOutput to
 // sqspoller.MessageOutput.
 func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string) *MessageOutput {
-	messages := make([]*Message, len(msgOut.Messages))
-	for i := range msgOut.Messages {
+	messages := make([]*Message, 0)
+	for _, msg := range msgOut.Messages {
 		message := Message{
-			Message:  msgOut.Messages[i],
+			Message:  msg,
 			client:   svc,
 			queueURL: qURL,
 		}
