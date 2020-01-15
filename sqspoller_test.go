@@ -3,7 +3,6 @@ package sqspoller_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -26,7 +25,7 @@ func TestPoller(t *testing.T) {
 	t.Run("basic polling", tests.BasicPolling)
 	t.Run("timeout - no messages to receive", tests.TimeoutNoMessages)
 	t.Run("timeout - after several messages", tests.TimeoutAfterSeveralMessages)
-	t.Run("timeout - reset if timeout happened during message handling", tests.TimeoutResetIfHandlingMessage)
+	t.Run("timeout - reset if timeout happens during message handling", tests.TimeoutResetIfHandlingMessage)
 }
 
 // PollerTests holds the tests for the Poller
@@ -38,9 +37,6 @@ type PollerTests struct {
 func (p *PollerTests) BasicPolling(t *testing.T) {
 	// ==============================================================
 	// Send message to SQS queue.
-
-	fmt.Println("BASIC")
-
 	messageBody := "message-body"
 
 	sendResp, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
