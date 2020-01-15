@@ -2,7 +2,6 @@ package sqspoller
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go/service/sqs"
 	"testing"
 )
 
@@ -16,7 +15,7 @@ func Test_wrapMiddleware(t *testing.T) {
 	text := ""
 
 	middleWare1 := func(handler Handler) Handler {
-		h := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+		h := func(ctx context.Context, msg *MessageOutput, err error) error {
 			text += "1"
 			if err := handler(ctx, msg, err); err != nil {
 				return err
@@ -28,7 +27,7 @@ func Test_wrapMiddleware(t *testing.T) {
 	}
 
 	middleWare2 := func(handler Handler) Handler {
-		h := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+		h := func(ctx context.Context, msg *MessageOutput, err error) error {
 			text += "2"
 			if err := handler(ctx, msg, err); err != nil {
 				return err
@@ -39,14 +38,14 @@ func Test_wrapMiddleware(t *testing.T) {
 		return h
 	}
 
-	handler := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+	handler := func(ctx context.Context, msg *MessageOutput, err error) error {
 		text += "handler"
 		return nil
 	}
 
 	wrappedHandler := wrapMiddleware([]Middleware{middleWare1, middleWare2}, handler)
 
-	if err := wrappedHandler(context.Background(), &sqs.ReceiveMessageOutput{}, nil); err != nil {
+	if err := wrappedHandler(context.Background(), &MessageOutput{}, nil); err != nil {
 		t.Fatalf("wrappedHandler should not have returned an error: %v", err)
 	}
 
@@ -62,7 +61,7 @@ func TestPoller_Use(t *testing.T) {
 	text := ""
 
 	middleWare1 := func(handler Handler) Handler {
-		h := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+		h := func(ctx context.Context, msg *MessageOutput, err error) error {
 			text += "1"
 			if err := handler(ctx, msg, err); err != nil {
 				return err
@@ -74,7 +73,7 @@ func TestPoller_Use(t *testing.T) {
 	}
 
 	middleWare2 := func(handler Handler) Handler {
-		h := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+		h := func(ctx context.Context, msg *MessageOutput, err error) error {
 			text += "2"
 			if err := handler(ctx, msg, err); err != nil {
 				return err
@@ -85,7 +84,7 @@ func TestPoller_Use(t *testing.T) {
 		return h
 	}
 
-	handler := func(ctx context.Context, msg *sqs.ReceiveMessageOutput, err error) error {
+	handler := func(ctx context.Context, msg *MessageOutput, err error) error {
 		text += "handler"
 		return nil
 	}
@@ -99,7 +98,7 @@ func TestPoller_Use(t *testing.T) {
 	poller.Handle(handler)
 
 	wrappedHandler := poller.handler
-	if err := wrappedHandler(context.Background(), &sqs.ReceiveMessageOutput{}, nil); err != nil {
+	if err := wrappedHandler(context.Background(), &MessageOutput{}, nil); err != nil {
 		t.Fatalf("wrappedHandler should not have returned an error: %v", err)
 	}
 
@@ -119,7 +118,7 @@ func TestPoller_Use(t *testing.T) {
 	poller.Handle(handler)
 
 	wrappedHandler = poller.handler
-	if err := wrappedHandler(context.Background(), &sqs.ReceiveMessageOutput{}, nil); err != nil {
+	if err := wrappedHandler(context.Background(), &MessageOutput{}, nil); err != nil {
 		t.Fatalf("wrappedHandler should not have returned an error: %v", err)
 	}
 
