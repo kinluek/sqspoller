@@ -82,8 +82,12 @@ func (p *Poller) StartPolling() error {
 
 	ctx, cancel := context.WithCancel(p.ctx)
 
+	//======================================================================
+	// Start Polling
 	pollingErrors := p.poll(ctx)
 
+	//======================================================================
+	// Handle Polling errors or Shutdown signals
 polling:
 	for {
 		select {
@@ -98,8 +102,8 @@ polling:
 
 	}
 
-	// flush out any errors from requests handled
-	// during shutdown.
+	//======================================================================
+	// Flush out remaining errors after shutdown
 	for err := range pollingErrors {
 		if err == context.Canceled {
 			p.shutdownErrors <- nil
@@ -111,7 +115,8 @@ polling:
 		}
 	}
 
-	// this code should never be reached.
+	// This code should never be reached! Urgent fix
+	// required if this error is ever returned!
 	p.shutdownErrors <- ErrIntegrityIssue
 	return nil
 }
@@ -128,17 +133,16 @@ func (p *Poller) poll(ctx context.Context) chan error {
 		for {
 			var handlingMessage bool
 			//======================================================================
-			// Make message receive request
+			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
 			if len(out.Messages) > 0 {
 				handlingMessage = true
 			}
 
-			handlerError := make(chan error)
-
 			//======================================================================
-			// Handler is called here
+			// Call Handler with message request results.
+			handlerError := make(chan error)
 			go func() {
 				if err := p.handler(ctx, convertMessage(out, p.client, p.queueURL), err); err != nil {
 					handlerError <- err
@@ -148,7 +152,7 @@ func (p *Poller) poll(ctx context.Context) chan error {
 			}()
 
 			//======================================================================
-			// Wait for handler to finish or for shutdown signals
+			// Wait for handler to return or handle cancellation.
 			switch p.AllowTimeout {
 			case false:
 				if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {

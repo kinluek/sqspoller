@@ -9,7 +9,7 @@ import (
 // channel, context cancellations and poll time intervals.
 func waitForSignals(ctx context.Context, handlerError chan error, interval time.Duration) error {
 	//======================================================================
-	// Wait for handler to return
+	// Wait for handler or cancellation signal
 	select {
 	case err := <-handlerError:
 		if err != nil {
@@ -23,11 +23,11 @@ func waitForSignals(ctx context.Context, handlerError chan error, interval time.
 	}
 
 	//======================================================================
-	// Set waitForSignals time to next poll
+	// Set wait time to next poll
 	nextPoll := time.After(interval)
 
 	//======================================================================
-	// Handle intervals and timedOuts
+	// Handle interval, cancellation
 	select {
 	case <-nextPoll:
 		return nil
@@ -41,7 +41,7 @@ func waitForSignals(ctx context.Context, handlerError chan error, interval time.
 func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, interval time.Duration, handlingMsg bool, timedOut <-chan time.Time) error {
 
 	//======================================================================
-	// Wait for handler to return
+	// Wait for handler, timeout or cancellation signal
 	select {
 	case err := <-handlerError:
 		if err != nil {
@@ -59,11 +59,11 @@ func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, int
 	}
 
 	//======================================================================
-	// Set waitForSignals time to next poll
+	// Set wait time to next poll
 	nextPoll := time.After(interval)
 
 	//======================================================================
-	// Handle intervals and timedOuts
+	// Handle intervals, timeout or cancellation
 	select {
 	case <-nextPoll:
 		return nil
