@@ -121,6 +121,8 @@ polling:
 	return nil
 }
 
+// poll continuously polls the SQS queue in a separate goroutine,
+// the errors are returned on the returned channel.
 func (p *Poller) poll(ctx context.Context) chan error {
 
 	errorChan := make(chan error)
