@@ -55,11 +55,6 @@ type Poller struct {
 	client   *sqs.SQS
 	queueURL string
 
-	// Stop polling after the length of time since last message
-	// exceeds this value. 0 value equates to no timeout set, and
-	// the polling with never time out due to no messages being received.
-	TimeoutNoMessages time.Duration
-
 	// Time to wait for handler to process message, if handler function
 	// takes longer than this to return, then the program is exited.
 	TimeoutHandling time.Duration
@@ -95,9 +90,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 
 		queueURL: *config.QueueUrl,
 
-		TimeoutShutdown: 5 * time.Second,
-		shutdown:        make(chan struct{}),
-		shutdownErrors:  make(chan error, 1),
+		shutdown:       make(chan struct{}),
+		shutdownErrors: make(chan error, 1),
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -182,18 +176,16 @@ func (p *Poller) poll(ctx context.Context) chan error {
 
 	go func() {
 
-		timeout := time.After(p.TimeoutNoMessages)
-
 	polling:
 		for {
-			var handlingMessage bool
+			//var handlingMessage bool
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-			if len(out.Messages) > 0 {
-				handlingMessage = true
-			}
+			//if len(out.Messages) > 0 {
+			//	handlingMessage = true
+			//}
 
 			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
@@ -210,25 +202,12 @@ func (p *Poller) poll(ctx context.Context) chan error {
 
 			//======================================================================
 			// Wait for handler to return or handle cancellation.
-			switch p.TimeoutNoMessages > 0 {
-			case false:
-				if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
-					errorChan <- err
-					close(errorChan)
-					return
-				}
-				continue polling
-			case true:
-				if err := waitForSignalsWithTimeout(ctx, handlerError, p.Interval, handlingMessage, timeout); err != nil {
-					errorChan <- err
-					close(errorChan)
-					return
-				}
-				if handlingMessage {
-					timeout = time.After(p.TimeoutNoMessages)
-				}
-				continue polling
+			if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
+				errorChan <- err
+				close(errorChan)
+				return
 			}
+			continue polling
 
 		}
 	}()
