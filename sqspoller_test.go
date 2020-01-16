@@ -1,9 +1,9 @@
+// tests in this file require that you have docker installed and running.
 package sqspoller_test
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
@@ -144,7 +144,6 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		}()
 
 		<-shuttingDown
-		fmt.Println("shut down started")
 
 		time.Sleep(time.Second)
 		confirmed = true
@@ -155,7 +154,6 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		default:
 		}
 
-		fmt.Println("handler exited")
 		return nil
 	}
 
@@ -301,4 +299,3 @@ func (p *PollerTests) ContextValue(t *testing.T) {
 	}
 
 }
-
