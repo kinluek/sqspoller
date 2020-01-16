@@ -10,9 +10,13 @@ import (
 )
 
 var (
-	ErrNoHandler         = errors.New("ErrNoHandler: no handler set on Poller instance")
+	ErrNoHandler = errors.New("ErrNoHandler: no handler set on Poller instance")
+
 	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
-	ErrIntegrityIssue    = errors.New("ErrIntegrityIssue: unknown integrity issue")
+	ErrTimeoutHandling   = errors.New("ErrTimeoutHandling: handler took to long to process message")
+	ErrTimeoutShutdown   = errors.New("ErrTimeoutShutdown: could not shut down gracefully")
+
+	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
 // ctxKey is the package's context key type used to store
@@ -25,16 +29,16 @@ type ctxKey int
 // other packages.
 const CtxKey ctxKey = 1
 
-// CtxValues represents the values stored on the context
-// object which is passed down through the handler function
-// and middleware.
-type CtxValues struct {
+// CtxValue represents the values stored on the context
+// object about the message response which is passed down
+// through the handler function and middleware.
+type CtxValue struct {
 	TraceID string
 	Now     time.Time
 }
 
-func newCtxValues(traceID string, t time.Time) *CtxValues {
-	return &CtxValues{
+func newCtxValues(traceID string, t time.Time) *CtxValue {
+	return &CtxValue{
 		TraceID: traceID,
 		Now:     t,
 	}
@@ -51,10 +55,20 @@ type Poller struct {
 	client   *sqs.SQS
 	queueURL string
 
-	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
-	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
-	TimeoutShutdown   time.Duration // Poller will try to shutdown gracefully up to this time limit, where the poller will exit regardless of what's happening.
-	Interval          time.Duration // Time interval between each poll request.
+	// Time to wait for handler to process message, if handler function
+	// takes longer than this to return, then the program is exited.
+	TimeoutHandling time.Duration
+
+	// Poller will try to shutdown gracefully up to this time limit,
+	// After that, the poller will exit, regardless of what's happening.
+	// 0 value equates to no timeout set, thus the program will take
+	// as long as it has to, to gracefully shut down.
+	TimeoutShutdown time.Duration
+
+	// Time interval between each poll request. After a poll request
+	// has been made and response has been handled, the poller will
+	// wait for this amount of time before making the next call.
+	Interval time.Duration
 
 	shutdown       chan struct{} // channel to send shutdown signal on
 	shutdownErrors chan error    // channel to send errors on shutdown.
@@ -76,11 +90,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 
 		queueURL: *config.QueueUrl,
 
-		AllowTimeout: false,
-
-		TimeoutShutdown: 5 * time.Second,
-		shutdown:        make(chan struct{}),
-		shutdownErrors:  make(chan error, 1),
+		shutdown:       make(chan struct{}),
+		shutdownErrors: make(chan error, 1),
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -90,6 +101,16 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 	}
 
 	return &p
+}
+
+// Default creates a new instance of the SQS Poller from an instance
+// of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
+// SQS queue will be polled. It comes set up with the recommend middleware
+// plugged in.
+func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
+	p := New(sqsSvc, config, options...)
+	p.Use(IgnoreEmptyResponses())
+	return p
 }
 
 // Handle attaches a Handler to the Poller instance, if a Handler already
@@ -155,18 +176,16 @@ func (p *Poller) poll(ctx context.Context) chan error {
 
 	go func() {
 
-		timeout := time.After(p.TimeoutNoMessages)
-
 	polling:
 		for {
-			var handlingMessage bool
+			//var handlingMessage bool
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-			if len(out.Messages) > 0 {
-				handlingMessage = true
-			}
+			//if len(out.Messages) > 0 {
+			//	handlingMessage = true
+			//}
 
 			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
@@ -183,25 +202,12 @@ func (p *Poller) poll(ctx context.Context) chan error {
 
 			//======================================================================
 			// Wait for handler to return or handle cancellation.
-			switch p.AllowTimeout {
-			case false:
-				if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
-					errorChan <- err
-					close(errorChan)
-					return
-				}
-				continue polling
-			case true:
-				if err := waitForSignalsWithTimeout(ctx, handlerError, p.Interval, handlingMessage, timeout); err != nil {
-					errorChan <- err
-					close(errorChan)
-					return
-				}
-				if handlingMessage {
-					timeout = time.After(p.TimeoutNoMessages)
-				}
-				continue polling
+			if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
+				errorChan <- err
+				close(errorChan)
+				return
 			}
+			continue polling
 
 		}
 	}()
