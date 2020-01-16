@@ -26,6 +26,8 @@ func TestPoller(t *testing.T) {
 
 	t.Run("shutdown - basic", Test.Shutdown)
 	t.Run("shutdown - gracefully", Test.ShutdownGracefully)
+
+	t.Run("context -  contains CtxValue", Test.ContextValue)
 }
 
 // PollerTests holds the tests for the Poller
@@ -313,6 +315,36 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	}
 	if !confirmed {
 		t.Fatalf("expected confirmed to be true, but got false")
+	}
+
+}
+
+func (p *PollerTests) ContextValue(t *testing.T) {
+	// ==============================================================
+	// Create new poller using local queue.
+
+	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	// ==============================================================
+	// Set up Handler - confirm that sqspoller.CtxValue is contained
+	// within ctx object.
+
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxValue)
+		if !ok {
+			t.Fatalf("ctx should container CtxValues object")
+		}
+		go func() {
+			poller.Shutdown()
+		}()
+		return nil
+	}
+
+	poller.Handle(handler)
+	if err := poller.StartPolling(); err != nil {
+		t.Fatalf("poller should not have returned error: %v", err)
 	}
 
 }

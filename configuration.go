@@ -11,7 +11,6 @@ func (p *Poller) SetInterval(t time.Duration) {
 // ExitAfterNoMessagesReceivedFor, the poller will exit
 // after it has not received a message for the given time.
 func (p *Poller) ExitAfterNoMessagesReceivedFor(t time.Duration) {
-	p.AllowTimeout = true
 	p.TimeoutNoMessages = t
 }
 

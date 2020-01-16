@@ -55,8 +55,30 @@ func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, int
 			return ErrTimeoutNoMessages
 		}
 	case <-ctx.Done():
+		if err := <-handlerError; err != nil {
+			return err
+		}
 		return ctx.Err()
 	}
+
+	//select {
+	//case err := <-handlerError:
+	//	if err != nil {
+	//		return err
+	//	}
+	//case <-timedOut:
+	//	if err := <-handlerError; err != nil {
+	//		return err
+	//	}
+	//	if !handlingMsg {
+	//		return ErrTimeoutNoMessages
+	//	}
+	//case <-ctx.Done():
+	//	if err := <-handlerError; err != nil {
+	//		return err
+	//	}
+	//	return ctx.Err()
+	//}
 
 	//======================================================================
 	// Set wait time to next poll
@@ -72,4 +94,29 @@ func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, int
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (p *Poller) groupStopSignal(ctx context.Context, timeoutNoMsg, timeoutHandling <-chan time.Time) <-chan error {
+	stop := make(chan error)
+
+	go func() {
+		<-ctx.Done()
+		stop <- ctx.Err()
+	}()
+
+	if p.TimeoutNoMessages > 0 {
+		go func() {
+			<-timeoutNoMsg
+			stop <- ErrTimeoutNoMessages
+		}()
+	}
+
+	if p.TimeoutHandling > 0 {
+		go func() {
+			<-timeoutHandling
+			stop <- ErrTimeoutNoMessages
+		}()
+	}
+
+	return stop
 }
