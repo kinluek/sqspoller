@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// waitOnHandling waits for the handler to return its error
+// if a cancellation or timeout signal received before the
+// handler can finish processing the current job, then the function
+// returns a non nil error to tell the poller to exit.
 func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error) error {
 
 	timeoutHandling := make(chan time.Time, 1)
@@ -36,6 +40,8 @@ func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error)
 	return nil
 }
 
+// waitForNextPoll handles the time interval to wait till
+// the next poll request is made.
 func (p *Poller) waitForNextPoll(ctx context.Context) error {
 	nextPoll := time.After(p.Interval)
 
@@ -46,3 +52,18 @@ func (p *Poller) waitForNextPoll(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// checkForStopRequests is called at the end of a poll cycle
+// to check whether any stop requests have been made. If a stop
+// request is received, the function blocks the poller from making
+// anymore requests.
+func (p *Poller) checkForStopRequests() {
+	select {
+	case <-p.stopRequest:
+		p.stopConfirmed <- struct{}{}
+		<-p.stopRequest
+	default:
+	}
+}
+
+

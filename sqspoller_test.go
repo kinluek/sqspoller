@@ -3,6 +3,7 @@ package sqspoller_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
@@ -25,7 +26,6 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 
 	t.Run("timeout - handling", Test.TimeoutHandling)
-
 	t.Run("context -  contains CtxValue", Test.ContextValue)
 }
 
@@ -144,6 +144,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		}()
 
 		<-shuttingDown
+		fmt.Println("shut down started")
 
 		time.Sleep(time.Second)
 		confirmed = true
@@ -154,6 +155,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		default:
 		}
 
+		fmt.Println("handler exited")
 		return nil
 	}
 
@@ -299,3 +301,4 @@ func (p *PollerTests) ContextValue(t *testing.T) {
 	}
 
 }
+
