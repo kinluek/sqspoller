@@ -46,3 +46,14 @@ func (p *Poller) waitForNextPoll(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+func (p *Poller) checkForStopRequests() {
+	select {
+	case <-p.stopRequest:
+		p.stopConfirmed <- struct{}{}
+		<-p.stopRequest
+	default:
+	}
+}
+
+

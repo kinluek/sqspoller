@@ -49,41 +49,29 @@ func (p *Poller) ShutdownNow() error {
 	return <-p.shutdownErrors
 }
 
-
-func (p *Poller) handleShutdown(sd *shutdown, pollingErrors chan error) error {
+func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel context.CancelFunc) error {
 	switch sd.sig {
 	case now:
+		cancel()
 		p.shutdownErrors <- nil
 		return ErrShutdownNow
 
 	case graceful:
-		for err := range pollingErrors {
-			if err == context.Canceled {
-				p.shutdownErrors <- nil
-				return nil
-			}
-			if err != nil {
-				p.shutdownErrors <- nil
-				return err
-			}
-		}
-		// This code should never be reached! Urgent fix
-		// required if this error is ever returned!
-		p.shutdownErrors <- ErrIntegrityIssue
-
+		finalErr := p.finishCurrentJob(pollingErrors)
+		err := <-finalErr
+		cancel()
+		p.shutdownErrors <- nil
+		return err
 	case after:
+		finalErr := p.finishCurrentJob(pollingErrors)
 		for {
 			select {
-			case err := <-pollingErrors:
-				if err == context.Canceled {
-					p.shutdownErrors <- nil
-					return nil
-				}
-				if err != nil {
-					p.shutdownErrors <- nil
-					return err
-				}
+			case err := <-finalErr:
+				cancel()
+				p.shutdownErrors <- nil
+				return err
 			case <-sd.timeout:
+				cancel()
 				p.shutdownErrors <- ErrShutdownGraceful
 				return ErrShutdownGraceful
 			}
@@ -93,4 +81,18 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors chan error) error {
 	// This code should never be reached! Urgent fix
 	// required if this error is ever returned!
 	return ErrIntegrityIssue
+}
+
+func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
+
+	finalErr := make(chan error)
+
+	go func() {
+		p.stopRequest <- struct{}{}
+		err := <-pollingErrors
+		<-p.stopConfirmed
+		finalErr <- err
+	}()
+
+	return finalErr
 }
