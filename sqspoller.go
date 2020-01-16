@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -21,31 +20,6 @@ var (
 
 	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
-
-// ctxKey is the package's context key type used to store
-// values on context.Context object to avoid clashing
-// with other packages.
-type ctxKey int
-
-// CtxKey is the package's context key used to store
-// values on context.Context object to avoid clashing with
-// other packages.
-const CtxKey ctxKey = 1
-
-// CtxValue represents the values stored on the context
-// object about the message response which is passed down
-// through the handler function and middleware.
-type CtxValue struct {
-	TraceID string
-	Now     time.Time
-}
-
-func newCtxValues(traceID string, t time.Time) *CtxValue {
-	return &CtxValue{
-		TraceID: traceID,
-		Now:     t,
-	}
-}
 
 // Handler is function which handles the incoming SQS
 // message.
@@ -69,8 +43,8 @@ type Poller struct {
 
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
-	stopRequest    chan struct{}
-	stopConfirmed  chan struct{}
+	stopRequest    chan struct{}  // channel to send request to block polling
+	stopConfirmed  chan struct{}  // channel to send confirmation that polling has been blocked
 
 	handler         Handler
 	middleware      []Middleware
@@ -111,6 +85,7 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
 	p := New(sqsSvc, config, options...)
 	p.Use(IgnoreEmptyResponses())
+	p.Use(Tracking())
 	return p
 }
 
@@ -167,8 +142,6 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
-
 			//======================================================================
 			// Call Handler with message request results.
 			handlerError := make(chan error)
@@ -200,15 +173,3 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 
 	return errorChan
 }
-
-//// Error is the frameworks custom error type.
-//type Error struct {
-//	OriginalError error
-//	Meta          map[string]interface{}
-//	Message       string
-//}
-//
-//// Error returns the error message.
-//func (e *Error) Error() string {
-//	return e.Message
-//}

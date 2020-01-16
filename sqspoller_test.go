@@ -26,7 +26,7 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 
 	t.Run("timeout - handling", Test.TimeoutHandling)
-	t.Run("context -  contains CtxValue", Test.ContextValue)
+	t.Run("default poller - ctx has CtxTackingValue", Test.DefaultPollerContextValue)
 }
 
 // PollerTests holds the tests for the Poller
@@ -270,25 +270,37 @@ func (p *PollerTests) TimeoutHandling(t *testing.T) {
 	}
 }
 
-func (p *PollerTests) ContextValue(t *testing.T) {
+func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
+	// ==============================================================
+	// Put a message in queue
+	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
+		QueueUrl:    p.queueURL,
+		MessageBody: aws.String("messageBody"),
+	})
+	if err != nil {
+		t.Fatalf("failed to send message to SQS: %v", err)
+	}
+
 	// ==============================================================
 	// Create new poller using local queue.
 
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.Default(p.sqsClient, sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
 	// ==============================================================
-	// Set up Handler - confirm that sqspoller.CtxValue is contained
+	// Set up Handler - confirm that sqspoller.CtxTackingValue is contained
 	// within ctx object.
 
 	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
-		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxValue)
+		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
 		}
 		go func() {
-			poller.ShutdownGracefully()
+			if err := poller.ShutdownGracefully(); err != nil {
+				t.Fatalf("could not shut down gracefully: %v", err)
+			}
 		}()
 		return nil
 	}
