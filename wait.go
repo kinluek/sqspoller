@@ -5,51 +5,44 @@ import (
 	"time"
 )
 
-// waitForSignals knows how to handle signals coming from the handler
-// channel, context cancellations and poll time intervals.
-func waitForSignals(ctx context.Context, handlerError chan error, interval time.Duration) error {
-	//======================================================================
-	// Wait for handler or cancellation signal
+func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error) error {
+
+	timeoutHandling := make(chan time.Time, 1)
+
+	// if TimeoutHandling has been set, spin off a go routine
+	// to handle the timeout signal
+	if p.TimeoutHandling > 0 {
+		go func() {
+			timeout := time.After(p.TimeoutHandling)
+			t := <-timeout
+			timeoutHandling <- t
+		}()
+	}
+
 	select {
-	case err := <-handlerError:
+	case err := <-handlerErrors:
 		if err != nil {
 			return err
 		}
+	case <-timeoutHandling:
+		return ErrTimeoutHandling
 	case <-ctx.Done():
-		if err := <-handlerError; err != nil {
+		if err := <-handlerErrors; err != nil {
 			return err
 		}
 		return ctx.Err()
 	}
 
-	//======================================================================
-	// Set wait time to next poll
-	nextPoll := time.After(interval)
+	return nil
+}
 
-	//======================================================================
-	// Handle interval, cancellation
+func (p *Poller) waitForNextPoll(ctx context.Context) error {
+	nextPoll := time.After(p.Interval)
+
 	select {
 	case <-nextPoll:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func (p *Poller) groupStopSignal(ctx context.Context, timeoutNoMsg, timeoutHandling <-chan time.Time) <-chan error {
-	stop := make(chan error)
-
-	go func() {
-		<-ctx.Done()
-		stop <- ctx.Err()
-	}()
-
-	if p.TimeoutHandling > 0 {
-		go func() {
-			<-timeoutHandling
-			stop <- ErrTimeoutNoMessages
-		}()
-	}
-
-	return stop
 }
