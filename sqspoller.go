@@ -118,7 +118,6 @@ func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request
 // exists on the Poller instance, it will be replaced.
 func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 	handler = wrapMiddleware(middleware, handler)
-	handler = wrapMiddleware(p.middleware, handler)
 	p.handler = handler
 }
 
@@ -132,8 +131,12 @@ func (p *Poller) Run() error {
 	ctx, cancel := context.WithCancel(p.ctx)
 
 	//======================================================================
+	// Apply Global Middleware upon starting
+	handler := wrapMiddleware(p.middleware, p.handler)
+
+	//======================================================================
 	// Start Polling
-	pollingErrors := p.poll(ctx)
+	pollingErrors := p.poll(ctx, handler)
 
 	//======================================================================
 	// Handle Polling errors or shutdown signals
@@ -152,7 +155,7 @@ func (p *Poller) Run() error {
 
 // poll continuously polls the SQS queue in a separate goroutine,
 // the errors are returned on the returned channel.
-func (p *Poller) poll(ctx context.Context) chan error {
+func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 
 	errorChan := make(chan error)
 
@@ -170,7 +173,7 @@ func (p *Poller) poll(ctx context.Context) chan error {
 			// Call Handler with message request results.
 			handlerError := make(chan error)
 			go func() {
-				if err := p.handler(ctx, convertMessage(out, p.client, p.queueURL), err); err != nil {
+				if err := handler(ctx, convertMessage(out, p.client, p.queueURL), err); err != nil {
 					handlerError <- err
 					return
 				}

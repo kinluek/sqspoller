@@ -1,3 +1,4 @@
+// tests in this file require that you have docker installed and running.
 package sqspoller_test
 
 import (
