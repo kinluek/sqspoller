@@ -69,6 +69,8 @@ type Poller struct {
 
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
+	stopRequest    chan struct{}
+	stopConfirmed  chan struct{}
 
 	handler         Handler
 	middleware      []Middleware
@@ -89,6 +91,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 
 		shutdown:       make(chan *shutdown),
 		shutdownErrors: make(chan error, 1),
+		stopRequest:    make(chan struct{}, 1),
+		stopConfirmed:  make(chan struct{}),
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -132,7 +136,7 @@ func (p *Poller) Run() error {
 	pollingErrors := p.poll(ctx)
 
 	//======================================================================
-	// Handle Polling errors or ShutdownGracefully signals
+	// Handle Polling errors or shutdown signals
 	for {
 		select {
 		case err := <-pollingErrors:
@@ -140,8 +144,7 @@ func (p *Poller) Run() error {
 				return err
 			}
 		case sd := <-p.shutdown:
-			cancel()
-			return p.handleShutdown(sd, pollingErrors)
+			return p.handleShutdown(sd, pollingErrors, cancel)
 		}
 
 	}
@@ -182,6 +185,10 @@ func (p *Poller) poll(ctx context.Context) chan error {
 				errorChan <- err
 				return
 			}
+
+			errorChan <- nil
+
+			p.checkForStopRequests()
 
 			continue polling
 
