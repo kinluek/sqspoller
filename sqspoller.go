@@ -132,7 +132,7 @@ func (p *Poller) Run() error {
 	pollingErrors := p.poll(ctx)
 
 	//======================================================================
-	// Handle Polling errors or ShutdownGracefully signals
+	// Handle Polling errors or shutdown signals
 	for {
 		select {
 		case err := <-pollingErrors:
