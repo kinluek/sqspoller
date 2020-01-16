@@ -5,70 +5,43 @@ import (
 	"time"
 )
 
-// waitForSignals knows how to handle signals coming from the handler
-// channel, context cancellations and poll time intervals.
-func waitForSignals(ctx context.Context, handlerError chan error, interval time.Duration) error {
-	//======================================================================
-	// Wait for handler or cancellation signal
+func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error) error {
+
+	timeoutHandling := make(chan time.Time, 1)
+
+	// if TimeoutHandling has been set, spin off a go routine
+	// to handle the timeout signal
+	if p.TimeoutHandling > 0 {
+		go func() {
+			timeout := time.After(p.TimeoutHandling)
+			t := <-timeout
+			timeoutHandling <- t
+		}()
+	}
+
 	select {
-	case err := <-handlerError:
+	case err := <-handlerErrors:
 		if err != nil {
 			return err
 		}
+	case <-timeoutHandling:
+		return ErrTimeoutHandling
 	case <-ctx.Done():
-		if err := <-handlerError; err != nil {
+		if err := <-handlerErrors; err != nil {
 			return err
 		}
 		return ctx.Err()
 	}
 
-	//======================================================================
-	// Set wait time to next poll
-	nextPoll := time.After(interval)
-
-	//======================================================================
-	// Handle interval, cancellation
-	select {
-	case <-nextPoll:
-		return nil
-	case <-ctx.Done():
-		return nil
-	}
+	return nil
 }
 
-// waitForSignalsWithTimeout knows how to handle signals coming from the handler
-// channel, context cancellations, poll time intervals and timeouts.
-func waitForSignalsWithTimeout(ctx context.Context, handlerError chan error, interval time.Duration, handlingMsg bool, timedOut <-chan time.Time) error {
+func (p *Poller) waitForNextPoll(ctx context.Context) error {
+	nextPoll := time.After(p.Interval)
 
-	//======================================================================
-	// Wait for handler, timeout or cancellation signal
-	select {
-	case err := <-handlerError:
-		if err != nil {
-			return err
-		}
-	case <-timedOut:
-		if err := <-handlerError; err != nil {
-			return err
-		}
-		if !handlingMsg {
-			return ErrTimeoutNoMessages
-		}
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
-	//======================================================================
-	// Set wait time to next poll
-	nextPoll := time.After(interval)
-
-	//======================================================================
-	// Handle intervals, timeout or cancellation
 	select {
 	case <-nextPoll:
 		return nil
-	case <-timedOut:
-		return ErrTimeoutNoMessages
 	case <-ctx.Done():
 		return ctx.Err()
 	}

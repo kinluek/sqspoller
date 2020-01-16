@@ -19,8 +19,10 @@ else
 	-v $(PWD):/go/code \
 	-e DOCKER_NETWORK=${NETWORK} \
 	-e ENVIRONMENT=CI \
+	-e CGO_ENABLED=0 \
 	--network ${NETWORK} \
-	kinluek/go-docker:entry
+	kinluek/go-docker:entry \
+	go test -v -cover
 
 	# run code in docker container, provide the NETWORK ENV
 	docker network rm ${NETWORK}

@@ -5,14 +5,47 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/google/uuid"
 	"time"
 )
 
 var (
-	ErrNoHandler         = errors.New("ErrNoHandler: no handler set on Poller instance")
+	ErrNoHandler = errors.New("ErrNoHandler: no handler set on Poller instance")
+
 	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
-	ErrIntegrityIssue    = errors.New("ErrIntegrityIssue: unknown integrity issue")
+	ErrTimeoutHandling   = errors.New("ErrTimeoutHandling: handler took to long to process message")
+	ErrTimeoutShutdown   = errors.New("ErrTimeoutShutdown: could not shut down gracefully")
+
+	ErrShutdownNow      = errors.New("ErrShutdownNow: poller was suddenly shutdown")
+	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
+
+	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
+
+// ctxKey is the package's context key type used to store
+// values on context.Context object to avoid clashing
+// with other packages.
+type ctxKey int
+
+// CtxKey is the package's context key used to store
+// values on context.Context object to avoid clashing with
+// other packages.
+const CtxKey ctxKey = 1
+
+// CtxValue represents the values stored on the context
+// object about the message response which is passed down
+// through the handler function and middleware.
+type CtxValue struct {
+	TraceID string
+	Now     time.Time
+}
+
+func newCtxValues(traceID string, t time.Time) *CtxValue {
+	return &CtxValue{
+		TraceID: traceID,
+		Now:     t,
+	}
+}
 
 // Handler is function which handles the incoming SQS
 // message.
@@ -25,13 +58,17 @@ type Poller struct {
 	client   *sqs.SQS
 	queueURL string
 
-	AllowTimeout      bool          // If set to true, the timeouts are taken into effect, else, timeouts are ignored.
-	TimeoutNoMessages time.Duration // Stop polling after the length of time since last message exceeds this value.
-	TimeoutShutdown   time.Duration // Poller will try to shutdown gracefully up to this time limit, where the poller will exit regardless of what's happening.
-	Interval          time.Duration // Time interval between each poll request.
+	// Time to wait for handler to process message, if handler function
+	// takes longer than this to return, then the program is exited.
+	TimeoutHandling time.Duration
 
-	shutdown       chan struct{} // channel to send shutdown signal on
-	shutdownErrors chan error    // channel to send errors on shutdown.
+	// Time interval between each poll request. After a poll request
+	// has been made and response has been handled, the poller will
+	// wait for this amount of time before making the next call.
+	Interval time.Duration
+
+	shutdown       chan *shutdown // channel to send shutdown instructions on.
+	shutdownErrors chan error     // channel to send errors on shutdown.
 
 	handler         Handler
 	middleware      []Middleware
@@ -50,11 +87,8 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 
 		queueURL: *config.QueueUrl,
 
-		AllowTimeout: false,
-
-		TimeoutShutdown: 5 * time.Second,
-		shutdown:        make(chan struct{}),
-		shutdownErrors:  make(chan error, 1),
+		shutdown:       make(chan *shutdown),
+		shutdownErrors: make(chan error, 1),
 
 		receiveMsgInput: &config,
 		options:         options,
@@ -66,6 +100,16 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 	return &p
 }
 
+// Default creates a new instance of the SQS Poller from an instance
+// of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
+// SQS queue will be polled. It comes set up with the recommend middleware
+// plugged in.
+func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
+	p := New(sqsSvc, config, options...)
+	p.Use(IgnoreEmptyResponses())
+	return p
+}
+
 // Handle attaches a Handler to the Poller instance, if a Handler already
 // exists on the Poller instance, it will be replaced.
 func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
@@ -74,8 +118,9 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 	p.handler = handler
 }
 
-// StartPolling starts the poller.
-func (p *Poller) StartPolling() error {
+// Run starts the poller, the poller will continuously poll SQS until
+// an error is returned, or explicitly told to shutdown.
+func (p *Poller) Run() error {
 	if p.handler == nil {
 		return ErrNoHandler
 	}
@@ -87,38 +132,19 @@ func (p *Poller) StartPolling() error {
 	pollingErrors := p.poll(ctx)
 
 	//======================================================================
-	// Handle Polling errors or Shutdown signals
-polling:
+	// Handle Polling errors or ShutdownGracefully signals
 	for {
 		select {
 		case err := <-pollingErrors:
 			if err != nil {
 				return err
 			}
-		case <-p.shutdown:
+		case sd := <-p.shutdown:
 			cancel()
-			break polling
+			return p.handleShutdown(sd, pollingErrors)
 		}
 
 	}
-
-	//======================================================================
-	// Flush out remaining errors after shutdown
-	for err := range pollingErrors {
-		if err == context.Canceled {
-			p.shutdownErrors <- nil
-			return nil
-		}
-		if err != nil {
-			p.shutdownErrors <- err
-			return err
-		}
-	}
-
-	// This code should never be reached! Urgent fix
-	// required if this error is ever returned!
-	p.shutdownErrors <- ErrIntegrityIssue
-	return nil
 }
 
 // poll continuously polls the SQS queue in a separate goroutine,
@@ -128,19 +154,14 @@ func (p *Poller) poll(ctx context.Context) chan error {
 	errorChan := make(chan error)
 
 	go func() {
-
-		timeout := time.After(p.TimeoutNoMessages)
-
+		defer close(errorChan)
 	polling:
 		for {
-			var handlingMessage bool
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-			if len(out.Messages) > 0 {
-				handlingMessage = true
-			}
+			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
 			//======================================================================
 			// Call Handler with message request results.
@@ -153,27 +174,16 @@ func (p *Poller) poll(ctx context.Context) chan error {
 				handlerError <- nil
 			}()
 
-			//======================================================================
-			// Wait for handler to return or handle cancellation.
-			switch p.AllowTimeout {
-			case false:
-				if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
-					errorChan <- err
-					close(errorChan)
-					return
-				}
-				continue polling
-			case true:
-				if err := waitForSignalsWithTimeout(ctx, handlerError, p.Interval, handlingMessage, timeout); err != nil {
-					errorChan <- err
-					close(errorChan)
-					return
-				}
-				if handlingMessage {
-					timeout = time.After(p.TimeoutNoMessages)
-				}
-				continue polling
+			if err := p.waitOnHandling(ctx, handlerError); err != nil {
+				errorChan <- err
+				return
 			}
+			if err := p.waitForNextPoll(ctx); err != nil {
+				errorChan <- err
+				return
+			}
+
+			continue polling
 
 		}
 	}()
@@ -181,20 +191,14 @@ func (p *Poller) poll(ctx context.Context) chan error {
 	return errorChan
 }
 
-// Shutdown gracefully shuts down the poller.
-func (p *Poller) Shutdown() error {
-	p.shutdown <- struct{}{}
-	return <-p.shutdownErrors
-}
-
-// Error is the frameworks custom error type.
-type Error struct {
-	OriginalError error
-	Meta          map[string]interface{}
-	Message       string
-}
-
-// Error returns the error message.
-func (e *Error) Error() string {
-	return e.Message
-}
+//// Error is the frameworks custom error type.
+//type Error struct {
+//	OriginalError error
+//	Meta          map[string]interface{}
+//	Message       string
+//}
+//
+//// Error returns the error message.
+//func (e *Error) Error() string {
+//	return e.Message
+//}

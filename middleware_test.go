@@ -2,6 +2,7 @@ package sqspoller
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -127,3 +128,58 @@ func TestPoller_Use(t *testing.T) {
 	}
 
 }
+
+func TestIgnoreEmptyResponses(t *testing.T) {
+
+	tests := []struct {
+		name        string
+		wantReached bool
+		messages    []*Message
+		Err         error
+	}{
+		{
+			name:        "nil messages",
+			wantReached: false,
+			messages:    nil,
+			Err:         nil,
+		},
+		{
+			name:        "no messages",
+			wantReached: false,
+			messages:    make([]*Message, 0),
+			Err:         nil,
+		},
+		{
+			name:        "has messages",
+			wantReached: true,
+			messages:    make([]*Message, 1),
+			Err:         nil,
+		},
+		{
+			name:        "no messages with error",
+			wantReached: true,
+			messages:    make([]*Message, 0),
+			Err:         errors.New("error"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var innerReached bool
+
+			inner := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+				innerReached = true
+				return errors.New("inner error")
+			}
+
+			handler := IgnoreEmptyResponses()(inner)
+			handler(context.Background(), &MessageOutput{Messages: tt.messages}, tt.Err)
+
+			if innerReached != tt.wantReached {
+				t.Fatalf("wanted wantReached to be %v, got %v", tt.wantReached, innerReached)
+			}
+		})
+	}
+
+}
+
