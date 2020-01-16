@@ -19,8 +19,10 @@ func TestPoller(t *testing.T) {
 
 	t.Run("polling - basic", Test.BasicPolling)
 
-	t.Run("shutdown - basic", Test.Shutdown)
+	t.Run("shutdown - now", Test.ShutdownNow)
 	t.Run("shutdown - gracefully", Test.ShutdownGracefully)
+	t.Run("shutdown - after: time limit not reached", Test.ShutdownAfterLimitNotReached)
+	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 
 	t.Run("timeout - handling", Test.TimeoutHandling)
 
@@ -76,13 +78,13 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 
 	poller.Handle(handler)
 
-	err = poller.StartPolling()
+	err = poller.Run()
 	if err != confirmedRunning {
 		t.Fatalf("could not run poller: %v", err)
 	}
 }
 
-func (p *PollerTests) Shutdown(t *testing.T) {
+func (p *PollerTests) ShutdownNow(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
 
@@ -93,6 +95,7 @@ func (p *PollerTests) Shutdown(t *testing.T) {
 	// ==============================================================
 	// Set up empty handler.
 	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		time.Sleep(time.Second)
 		return nil
 	}
 
@@ -103,14 +106,14 @@ func (p *PollerTests) Shutdown(t *testing.T) {
 	// ==============================================================
 	// Start Polling in separate goroutine
 	go func() {
-		pollingErrors <- poller.StartPolling()
+		pollingErrors <- poller.Run()
 	}()
 
-	if err := poller.Shutdown(); err != nil {
-		t.Fatalf("error shutting down %v", err)
+	if err := poller.ShutdownNow(); err != nil {
+		t.Fatalf("error shutting down now: %v", err)
 	}
-	if err := <-pollingErrors; err != nil {
-		t.Fatalf("error polling %v", err)
+	if err := <-pollingErrors; err != sqspoller.ErrShutdownNow {
+		t.Fatalf("unexpected error shutting down now %v", err)
 	}
 
 }
@@ -137,7 +140,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		shuttingDown := make(chan struct{})
 		go func() {
 			shuttingDown <- struct{}{}
-			shutdownFinished <- poller.Shutdown()
+			shutdownFinished <- poller.ShutdownGracefully()
 		}()
 
 		<-shuttingDown
@@ -159,7 +162,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	pollingErrors := make(chan error, 1)
 
 	go func() {
-		pollingErrors <- poller.StartPolling()
+		pollingErrors <- poller.Run()
 	}()
 
 	if err := <-shutdownFinished; err != nil {
@@ -171,6 +174,74 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	}
 	if !confirmed {
 		t.Fatalf("expected confirmed to be true, but got false")
+	}
+
+}
+
+func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
+	// ==============================================================
+	// Create new poller using local queue.
+
+	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	// ==============================================================
+	// Set up empty handler.
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		time.Sleep(200 * time.Millisecond)
+		return nil
+	}
+
+	poller.Handle(handler)
+	pollingErrors := make(chan error, 1)
+
+	// ==============================================================
+	// Start Polling in separate goroutine
+	go func() {
+		pollingErrors <- poller.Run()
+	}()
+
+	if err := poller.ShutdownAfter(time.Second); err != nil {
+		t.Fatalf("could not shutdown gracefully: %v", err)
+	}
+
+	if err := <-pollingErrors; err != nil {
+		t.Fatalf("unexpected error shutting down: %v", err)
+	}
+
+}
+
+func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
+	// ==============================================================
+	// Create new poller using local queue.
+
+	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	// ==============================================================
+	// Set up empty handler.
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		time.Sleep(500 * time.Millisecond)
+		return nil
+	}
+
+	poller.Handle(handler)
+	pollingErrors := make(chan error, 1)
+
+	// ==============================================================
+	// Start Polling in separate goroutine
+	go func() {
+		pollingErrors <- poller.Run()
+	}()
+
+	if err := poller.ShutdownAfter(100 * time.Millisecond); err != sqspoller.ErrShutdownGraceful {
+		t.Fatalf("unexpected error returned from ShutdownAfter(): %v", err)
+	}
+
+	if err := <-pollingErrors; err != sqspoller.ErrShutdownGraceful {
+		t.Fatalf("unexpected error return from pollingErrors: %v", err)
 	}
 
 }
@@ -194,7 +265,7 @@ func (p *PollerTests) TimeoutHandling(t *testing.T) {
 
 	poller.Handle(handler)
 
-	if err := poller.StartPolling(); err != sqspoller.ErrTimeoutHandling {
+	if err := poller.Run(); err != sqspoller.ErrTimeoutHandling {
 		t.Fatalf("expected to get ErrTimeoutHandling, got %v", err)
 	}
 }
@@ -217,13 +288,13 @@ func (p *PollerTests) ContextValue(t *testing.T) {
 			t.Fatalf("ctx should container CtxValues object")
 		}
 		go func() {
-			poller.Shutdown()
+			poller.ShutdownGracefully()
 		}()
 		return nil
 	}
 
 	poller.Handle(handler)
-	if err := poller.StartPolling(); err != nil {
+	if err := poller.Run(); err != nil {
 		t.Fatalf("poller should not have returned error: %v", err)
 	}
 

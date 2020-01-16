@@ -16,6 +16,9 @@ var (
 	ErrTimeoutHandling   = errors.New("ErrTimeoutHandling: handler took to long to process message")
 	ErrTimeoutShutdown   = errors.New("ErrTimeoutShutdown: could not shut down gracefully")
 
+	ErrShutdownNow      = errors.New("ErrShutdownNow: poller was suddenly shutdown")
+	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
+
 	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
@@ -59,19 +62,13 @@ type Poller struct {
 	// takes longer than this to return, then the program is exited.
 	TimeoutHandling time.Duration
 
-	// Poller will try to shutdown gracefully up to this time limit,
-	// After that, the poller will exit, regardless of what's happening.
-	// 0 value equates to no timeout set, thus the program will take
-	// as long as it has to, to gracefully shut down.
-	TimeoutShutdown time.Duration
-
 	// Time interval between each poll request. After a poll request
 	// has been made and response has been handled, the poller will
 	// wait for this amount of time before making the next call.
 	Interval time.Duration
 
-	shutdown       chan struct{} // channel to send shutdown signal on
-	shutdownErrors chan error    // channel to send errors on shutdown.
+	shutdown       chan *shutdown // channel to send shutdown instructions on.
+	shutdownErrors chan error     // channel to send errors on shutdown.
 
 	handler         Handler
 	middleware      []Middleware
@@ -90,7 +87,7 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 
 		queueURL: *config.QueueUrl,
 
-		shutdown:       make(chan struct{}),
+		shutdown:       make(chan *shutdown),
 		shutdownErrors: make(chan error, 1),
 
 		receiveMsgInput: &config,
@@ -121,8 +118,9 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 	p.handler = handler
 }
 
-// StartPolling starts the poller.
-func (p *Poller) StartPolling() error {
+// Run starts the poller, the poller will continuously poll SQS until
+// an error is returned, or explicitly told to shutdown.
+func (p *Poller) Run() error {
 	if p.handler == nil {
 		return ErrNoHandler
 	}
@@ -134,38 +132,19 @@ func (p *Poller) StartPolling() error {
 	pollingErrors := p.poll(ctx)
 
 	//======================================================================
-	// Handle Polling errors or Shutdown signals
-polling:
+	// Handle Polling errors or ShutdownGracefully signals
 	for {
 		select {
 		case err := <-pollingErrors:
 			if err != nil {
 				return err
 			}
-		case <-p.shutdown:
+		case sd := <-p.shutdown:
 			cancel()
-			break polling
+			return p.handleShutdown(sd, pollingErrors)
 		}
 
 	}
-
-	//======================================================================
-	// Flush out remaining errors after shutdown
-	for err := range pollingErrors {
-		if err == context.Canceled {
-			p.shutdownErrors <- nil
-			return nil
-		}
-		if err != nil {
-			p.shutdownErrors <- nil
-			return err
-		}
-	}
-
-	// This code should never be reached! Urgent fix
-	// required if this error is ever returned!
-	p.shutdownErrors <- ErrIntegrityIssue
-	return nil
 }
 
 // poll continuously polls the SQS queue in a separate goroutine,
@@ -181,7 +160,6 @@ func (p *Poller) poll(ctx context.Context) chan error {
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
-
 
 			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
@@ -213,20 +191,14 @@ func (p *Poller) poll(ctx context.Context) chan error {
 	return errorChan
 }
 
-// Shutdown gracefully shuts down the poller.
-func (p *Poller) Shutdown() error {
-	p.shutdown <- struct{}{}
-	return <-p.shutdownErrors
-}
-
-// Error is the frameworks custom error type.
-type Error struct {
-	OriginalError error
-	Meta          map[string]interface{}
-	Message       string
-}
-
-// Error returns the error message.
-func (e *Error) Error() string {
-	return e.Message
-}
+//// Error is the frameworks custom error type.
+//type Error struct {
+//	OriginalError error
+//	Meta          map[string]interface{}
+//	Message       string
+//}
+//
+//// Error returns the error message.
+//func (e *Error) Error() string {
+//	return e.Message
+//}
