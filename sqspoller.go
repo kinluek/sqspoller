@@ -157,7 +157,7 @@ polling:
 			return nil
 		}
 		if err != nil {
-			p.shutdownErrors <- err
+			p.shutdownErrors <- nil
 			return err
 		}
 	}
@@ -175,17 +175,13 @@ func (p *Poller) poll(ctx context.Context) chan error {
 	errorChan := make(chan error)
 
 	go func() {
-
+		defer close(errorChan)
 	polling:
 		for {
-			//var handlingMessage bool
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
-			//if len(out.Messages) > 0 {
-			//	handlingMessage = true
-			//}
 
 			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
@@ -200,13 +196,15 @@ func (p *Poller) poll(ctx context.Context) chan error {
 				handlerError <- nil
 			}()
 
-			//======================================================================
-			// Wait for handler to return or handle cancellation.
-			if err := waitForSignals(ctx, handlerError, p.Interval); err != nil {
+			if err := p.waitOnHandling(ctx, handlerError); err != nil {
 				errorChan <- err
-				close(errorChan)
 				return
 			}
+			if err := p.waitForNextPoll(ctx); err != nil {
+				errorChan <- err
+				return
+			}
+
 			continue polling
 
 		}

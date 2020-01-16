@@ -22,6 +22,8 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - basic", Test.Shutdown)
 	t.Run("shutdown - gracefully", Test.ShutdownGracefully)
 
+	t.Run("timeout - handling", Test.TimeoutHandling)
+
 	t.Run("context -  contains CtxValue", Test.ContextValue)
 }
 
@@ -171,6 +173,30 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		t.Fatalf("expected confirmed to be true, but got false")
 	}
 
+}
+
+func (p *PollerTests) TimeoutHandling(t *testing.T) {
+	// ==============================================================
+	// Create new poller using local queue.
+
+	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	poller.SetTimeoutHandling(time.Millisecond)
+
+	// ==============================================================
+	// Set up Handler - make sure handler runs for longer than TimeoutHandling
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	poller.Handle(handler)
+
+	if err := poller.StartPolling(); err != sqspoller.ErrTimeoutHandling {
+		t.Fatalf("expected to get ErrTimeoutHandling, got %v", err)
+	}
 }
 
 func (p *PollerTests) ContextValue(t *testing.T) {
