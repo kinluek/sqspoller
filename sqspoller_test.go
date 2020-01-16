@@ -26,6 +26,7 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 
 	t.Run("timeout - handling", Test.TimeoutHandling)
+
 	t.Run("default poller - ctx has CtxTackingValue", Test.DefaultPollerContextValue)
 }
 

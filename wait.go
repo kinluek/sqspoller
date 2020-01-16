@@ -17,8 +17,9 @@ func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error)
 	// to handle the timeout signal
 	if p.TimeoutHandling > 0 {
 		go func() {
-			timeout := time.After(p.TimeoutHandling)
-			t := <-timeout
+			timer := time.NewTimer(p.TimeoutHandling)
+			defer timer.Stop()
+			t := <-timer.C
 			timeoutHandling <- t
 		}()
 	}
@@ -43,10 +44,11 @@ func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error)
 // waitForNextPoll handles the time interval to wait till
 // the next poll request is made.
 func (p *Poller) waitForNextPoll(ctx context.Context) error {
-	nextPoll := time.After(p.Interval)
+	nextPoll := time.NewTimer(p.IntervalPoll)
+	defer nextPoll.Stop()
 
 	select {
-	case <-nextPoll:
+	case <-nextPoll.C:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -65,5 +67,3 @@ func (p *Poller) checkForStopRequests() {
 	default:
 	}
 }
-
-

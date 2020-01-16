@@ -39,8 +39,15 @@ type Poller struct {
 	// Time interval between each poll request. After a poll request
 	// has been made and response has been handled, the poller will
 	// wait for this amount of time before making the next call.
-	Interval time.Duration
+	IntervalPoll time.Duration
 
+
+	IntervalPulse time.Duration
+
+	// holds the time of the last poll request that was made.
+	LastPollTime time.Time
+
+	heartbeat      chan Pulse     // channel to send Pulse signals to reassure that the Poller is still running as expected.
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
@@ -138,6 +145,7 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 		defer close(errorChan)
 	polling:
 		for {
+			p.LastPollTime = time.Now()
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
