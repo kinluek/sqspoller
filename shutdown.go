@@ -49,6 +49,8 @@ func (p *Poller) ShutdownNow() error {
 	return <-p.shutdownErrors
 }
 
+// handleShutdown handles the shutdown logic for the three
+// different shutdown modes.
 func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel context.CancelFunc) error {
 	switch sd.sig {
 	case now:
@@ -83,6 +85,10 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 	return ErrIntegrityIssue
 }
 
+// finishCurrentJob sends a stop request to the poller to tell it
+// to stop making more polls after it has finished handling its 
+// current job. The returned channel will return the final error
+// once the poller has been confirmed to have stopped polling.
 func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
 
 	finalErr := make(chan error)
