@@ -13,12 +13,13 @@ func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error)
 
 	timeoutHandling := make(chan time.Time, 1)
 
-	// if TimeoutHandling has been set, spin off a go routine
+	// if HandlerTimeout has been set, spin off a go routine
 	// to handle the timeout signal
-	if p.TimeoutHandling > 0 {
+	if p.HandlerTimeout > 0 {
 		go func() {
-			timeout := time.After(p.TimeoutHandling)
-			t := <-timeout
+			timer := time.NewTimer(p.HandlerTimeout)
+			defer timer.Stop()
+			t := <-timer.C
 			timeoutHandling <- t
 		}()
 	}
@@ -29,7 +30,7 @@ func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error)
 			return err
 		}
 	case <-timeoutHandling:
-		return ErrTimeoutHandling
+		return ErrHandlerTimeout
 	case <-ctx.Done():
 		if err := <-handlerErrors; err != nil {
 			return err
@@ -43,10 +44,11 @@ func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error)
 // waitForNextPoll handles the time interval to wait till
 // the next poll request is made.
 func (p *Poller) waitForNextPoll(ctx context.Context) error {
-	nextPoll := time.After(p.Interval)
+	nextPoll := time.NewTimer(p.PollInterval)
+	defer nextPoll.Stop()
 
 	select {
-	case <-nextPoll:
+	case <-nextPoll.C:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -65,5 +67,3 @@ func (p *Poller) checkForStopRequests() {
 	default:
 	}
 }
-
-

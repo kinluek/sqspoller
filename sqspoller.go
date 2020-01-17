@@ -11,9 +11,7 @@ import (
 var (
 	ErrNoHandler = errors.New("ErrNoHandler: no handler set on Poller instance")
 
-	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
-	ErrTimeoutHandling   = errors.New("ErrTimeoutHandling: handler took to long to process message")
-	ErrTimeoutShutdown   = errors.New("ErrTimeoutShutdown: could not shut down gracefully")
+	ErrHandlerTimeout = errors.New("ErrHandlerTimeout: handler took to long to process message")
 
 	ErrShutdownNow      = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
@@ -34,12 +32,16 @@ type Poller struct {
 
 	// Time to wait for handler to process message, if handler function
 	// takes longer than this to return, then the program is exited.
-	TimeoutHandling time.Duration
+	HandlerTimeout time.Duration
 
 	// Time interval between each poll request. After a poll request
 	// has been made and response has been handled, the poller will
 	// wait for this amount of time before making the next call.
-	Interval time.Duration
+	PollInterval time.Duration
+
+	// Holds the time of the last poll request that was made. This can
+	// be checked periodically, to confirm the Poller is running as expected.
+	LastPollTime time.Time
 
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
@@ -114,7 +116,7 @@ func (p *Poller) Run() error {
 	pollingErrors := p.poll(ctx, handler)
 
 	//======================================================================
-	// Handle Polling errors or shutdown signals
+	// Handle Polling errors, shutdown signals, heartbeats
 	for {
 		select {
 		case err := <-pollingErrors:
@@ -138,6 +140,7 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 		defer close(errorChan)
 	polling:
 		for {
+			p.LastPollTime = time.Now()
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
