@@ -19,8 +19,17 @@ var (
 	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
-// Handler is function which handles the incoming SQS
+// Handler is a function which handles the incoming SQS
 // message.
+//
+// When making Handlers to be used by the Poller, make
+// sure the error value is checked first, before any
+// business logic code, unless you have created an error
+// checking middleware that wraps the core Handler.
+//
+// If the error is non-nil, it will be of type *awserr.Error
+// which is returned from a failed request for message from
+// SQS.
 type Handler func(ctx context.Context, msgOutput *MessageOutput, err error) error
 
 // Poller is an instance of the polling framework, it contains
