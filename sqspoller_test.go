@@ -25,8 +25,11 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - after: time limit not reached", Test.ShutdownAfterLimitNotReached)
 	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 
-	t.Run("timeout - handling", Test.TimeoutHandling)
-	t.Run("context -  contains CtxValue", Test.ContextValue)
+	t.Run("timeout - handling", Test.HandlerTimeout)
+
+	t.Run("LastPollTime updates", Test.LastPollTime)
+
+	t.Run("default poller - ctx has CtxTackingValue", Test.DefaultPollerContextValue)
 }
 
 // PollerTests holds the tests for the Poller
@@ -246,7 +249,7 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 
 }
 
-func (p *PollerTests) TimeoutHandling(t *testing.T) {
+func (p *PollerTests) HandlerTimeout(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
 
@@ -254,10 +257,10 @@ func (p *PollerTests) TimeoutHandling(t *testing.T) {
 		QueueUrl: p.queueURL,
 	})
 
-	poller.SetTimeoutHandling(time.Millisecond)
+	poller.SetHandlerTimeout(time.Millisecond)
 
 	// ==============================================================
-	// Set up Handler - make sure handler runs for longer than TimeoutHandling
+	// Set up Handler - make sure handler runs for longer than HandlerTimeout
 	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(time.Second)
 		return nil
@@ -265,12 +268,12 @@ func (p *PollerTests) TimeoutHandling(t *testing.T) {
 
 	poller.Handle(handler)
 
-	if err := poller.Run(); err != sqspoller.ErrTimeoutHandling {
-		t.Fatalf("expected to get ErrTimeoutHandling, got %v", err)
+	if err := poller.Run(); err != sqspoller.ErrHandlerTimeout {
+		t.Fatalf("expected to get ErrHandlerTimeout, got %v", err)
 	}
 }
 
-func (p *PollerTests) ContextValue(t *testing.T) {
+func (p *PollerTests) LastPollTime(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
 
@@ -279,16 +282,62 @@ func (p *PollerTests) ContextValue(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up Handler - confirm that sqspoller.CtxValue is contained
+	// Set up Handler
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		return nil
+	}
+	poller.Handle(handler)
+
+	// ==============================================================
+	// Start Polling in separate goroutine
+	pollingErrors := make(chan error)
+	go func() {
+		pollingErrors <- poller.Run()
+	}()
+
+	t1 := poller.LastPollTime
+	time.Sleep(time.Second)
+
+	t2 := poller.LastPollTime
+
+	if t1.String() ==  t2.String() {
+		t.Fatalf("t1: %v, should not equal t2: %v", t1.String(), t2.String())
+	}
+
+	poller.ShutdownNow()
+}
+
+func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
+	// ==============================================================
+	// Put a message in queue
+	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
+		QueueUrl:    p.queueURL,
+		MessageBody: aws.String("messageBody"),
+	})
+	if err != nil {
+		t.Fatalf("failed to send message to SQS: %v", err)
+	}
+
+	// ==============================================================
+	// Create new poller using local queue.
+
+	poller := sqspoller.Default(p.sqsClient, sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	// ==============================================================
+	// Set up Handler - confirm that sqspoller.CtxTackingValue is contained
 	// within ctx object.
 
 	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
-		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxValue)
+		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
 		}
 		go func() {
-			poller.ShutdownGracefully()
+			if err := poller.ShutdownGracefully(); err != nil {
+				t.Fatalf("could not shut down gracefully: %v", err)
+			}
 		}()
 		return nil
 	}

@@ -5,47 +5,19 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/google/uuid"
 	"time"
 )
 
 var (
 	ErrNoHandler = errors.New("ErrNoHandler: no handler set on Poller instance")
 
-	ErrTimeoutNoMessages = errors.New("ErrTimeoutNoMessages: no new messages in given time frame")
-	ErrTimeoutHandling   = errors.New("ErrTimeoutHandling: handler took to long to process message")
-	ErrTimeoutShutdown   = errors.New("ErrTimeoutShutdown: could not shut down gracefully")
+	ErrHandlerTimeout = errors.New("ErrHandlerTimeout: handler took to long to process message")
 
 	ErrShutdownNow      = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
 
 	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
-
-// ctxKey is the package's context key type used to store
-// values on context.Context object to avoid clashing
-// with other packages.
-type ctxKey int
-
-// CtxKey is the package's context key used to store
-// values on context.Context object to avoid clashing with
-// other packages.
-const CtxKey ctxKey = 1
-
-// CtxValue represents the values stored on the context
-// object about the message response which is passed down
-// through the handler function and middleware.
-type CtxValue struct {
-	TraceID string
-	Now     time.Time
-}
-
-func newCtxValues(traceID string, t time.Time) *CtxValue {
-	return &CtxValue{
-		TraceID: traceID,
-		Now:     t,
-	}
-}
 
 // Handler is function which handles the incoming SQS
 // message.
@@ -60,17 +32,21 @@ type Poller struct {
 
 	// Time to wait for handler to process message, if handler function
 	// takes longer than this to return, then the program is exited.
-	TimeoutHandling time.Duration
+	HandlerTimeout time.Duration
 
 	// Time interval between each poll request. After a poll request
 	// has been made and response has been handled, the poller will
 	// wait for this amount of time before making the next call.
-	Interval time.Duration
+	PollInterval time.Duration
+
+	// Holds the time of the last poll request that was made. This can
+	// be checked periodically, to confirm the Poller is running as expected.
+	LastPollTime time.Time
 
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
-	stopRequest    chan struct{}
-	stopConfirmed  chan struct{}
+	stopRequest    chan struct{}  // channel to send request to block polling
+	stopConfirmed  chan struct{}  // channel to send confirmation that polling has been blocked
 
 	handler         Handler
 	middleware      []Middleware
@@ -111,6 +87,7 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
 	p := New(sqsSvc, config, options...)
 	p.Use(IgnoreEmptyResponses())
+	p.Use(Tracking())
 	return p
 }
 
@@ -139,7 +116,7 @@ func (p *Poller) Run() error {
 	pollingErrors := p.poll(ctx, handler)
 
 	//======================================================================
-	// Handle Polling errors or shutdown signals
+	// Handle Polling errors, shutdown signals, heartbeats
 	for {
 		select {
 		case err := <-pollingErrors:
@@ -163,11 +140,10 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 		defer close(errorChan)
 	polling:
 		for {
+			p.LastPollTime = time.Now()
 			//======================================================================
 			// Make request to SQS queue for message
 			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
-
-			ctx := context.WithValue(ctx, CtxKey, newCtxValues(uuid.New().String(), time.Now()))
 
 			//======================================================================
 			// Call Handler with message request results.
@@ -200,15 +176,3 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 
 	return errorChan
 }
-
-//// Error is the frameworks custom error type.
-//type Error struct {
-//	OriginalError error
-//	Meta          map[string]interface{}
-//	Message       string
-//}
-//
-//// Error returns the error message.
-//func (e *Error) Error() string {
-//	return e.Message
-//}
