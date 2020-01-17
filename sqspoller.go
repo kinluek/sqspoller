@@ -52,6 +52,7 @@ type Poller struct {
 	// be checked periodically, to confirm the Poller is running as expected.
 	LastPollTime time.Time
 
+	running        bool           // true if Poller is in running state.
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
@@ -110,6 +111,11 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 // Run starts the poller, the poller will continuously poll SQS until
 // an error is returned, or explicitly told to shutdown.
 func (p *Poller) Run() error {
+	p.running = true
+	defer func() {
+		p.running = false
+	}()
+
 	if p.handler == nil {
 		return ErrNoHandler
 	}
