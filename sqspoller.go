@@ -5,15 +5,18 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"sync"
 	"time"
 )
 
 var (
-	ErrNoHandler              = errors.New("ErrNoHandler: no handler set on Poller instance")
+	ErrNoHandler              = errors.New("ErrNoHandler: no handler set on poller instance")
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
 	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: handler took to long to process message")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
+	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
+	ErrAlreadyRunning         = errors.New("ErrAlreadyShuttingDown: poller is already running")
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
@@ -51,6 +54,7 @@ type Poller struct {
 	LastPollTime time.Time
 
 	running        bool           // true if Poller is in running state.
+	shuttingDown   bool           // true if Poller is in the process of shutting down.
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
@@ -61,6 +65,7 @@ type Poller struct {
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
 
+	mtx *sync.RWMutex
 	ctx context.Context
 }
 
@@ -69,7 +74,7 @@ type Poller struct {
 func New(sqsSvc *sqs.SQS) *Poller {
 	p := Poller{
 		client: sqsSvc,
-		
+
 		shutdown:       make(chan *shutdown),
 		shutdownErrors: make(chan error, 1),
 		stopRequest:    make(chan struct{}, 1),
@@ -77,6 +82,7 @@ func New(sqsSvc *sqs.SQS) *Poller {
 
 		middleware: make([]Middleware, 0),
 
+		mtx: &sync.RWMutex{},
 		ctx: context.Background(),
 	}
 
@@ -103,10 +109,10 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 // Run starts the poller, the poller will continuously poll SQS until
 // an error is returned, or explicitly told to shutdown.
 func (p *Poller) Run() error {
-	p.running = true
-	defer func() {
-		p.running = false
-	}()
+	if err := p.checkAndSetRunningStatus(); err != nil {
+		return err
+	}
+	defer p.resetRunState()
 
 	if p.handler == nil {
 		return ErrNoHandler
