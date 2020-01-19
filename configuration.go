@@ -1,6 +1,19 @@
 package sqspoller
 
-import "time"
+import (
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"time"
+)
+
+// ReceiveMessageParams accepts the same parameters as the SQS ReceiveMessage
+// method. It configures how the poller receives new messages, the parameters
+// must be set before the Poller is run.
+func (p *Poller) ReceiveMessageParams(input *sqs.ReceiveMessageInput, opts ...request.Option) {
+	p.queueURL = *input.QueueUrl
+	p.receiveMsgInput = input
+	p.options = opts
+}
 
 // SetPollInterval lets the user set the time interval between
 // poll requests.

@@ -9,14 +9,12 @@ import (
 )
 
 var (
-	ErrNoHandler = errors.New("ErrNoHandler: no handler set on Poller instance")
-
-	ErrHandlerTimeout = errors.New("ErrHandlerTimeout: handler took to long to process message")
-
-	ErrShutdownNow      = errors.New("ErrShutdownNow: poller was suddenly shutdown")
-	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
-
-	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
+	ErrNoHandler              = errors.New("ErrNoHandler: no handler set on Poller instance")
+	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
+	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: handler took to long to process message")
+	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
+	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
+	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
 // Handler is a function which handles the incoming SQS
@@ -67,22 +65,17 @@ type Poller struct {
 }
 
 // New creates a new instance of the SQS Poller from an instance
-// of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
-// SQS queue will be polled.
-func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
+// of sqs.SQS.
+func New(sqsSvc *sqs.SQS) *Poller {
 	p := Poller{
 		client: sqsSvc,
-
-		queueURL: *config.QueueUrl,
-
+		
 		shutdown:       make(chan *shutdown),
 		shutdownErrors: make(chan error, 1),
 		stopRequest:    make(chan struct{}, 1),
 		stopConfirmed:  make(chan struct{}),
 
-		receiveMsgInput: &config,
-		options:         options,
-		middleware:      make([]Middleware, 0),
+		middleware: make([]Middleware, 0),
 
 		ctx: context.Background(),
 	}
@@ -91,11 +84,10 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 }
 
 // Default creates a new instance of the SQS Poller from an instance
-// of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
-// SQS queue will be polled. It comes set up with the recommend middleware
+// of sqs.SQS. It also comes set up with the recommend middleware
 // plugged in.
-func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
-	p := New(sqsSvc, config, options...)
+func Default(sqsSvc *sqs.SQS) *Poller {
+	p := New(sqsSvc)
 	p.Use(IgnoreEmptyResponses())
 	p.Use(Tracking())
 	return p
@@ -118,6 +110,9 @@ func (p *Poller) Run() error {
 
 	if p.handler == nil {
 		return ErrNoHandler
+	}
+	if p.receiveMsgInput == nil {
+		return ErrNoReceiveMessageParams
 	}
 
 	ctx, cancel := context.WithCancel(p.ctx)
