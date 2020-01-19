@@ -5,16 +5,20 @@ import (
 	"time"
 )
 
-type shutdownSig int
+// shutdownMode represents a mode of shutdown
+type shutdownMode int
 
 const (
-	now shutdownSig = iota
+	// shutdown modes:
+	now shutdownMode = iota
 	graceful
 	after
 )
 
+// shutdown holds information needed to perform
+// the required shutdown.
 type shutdown struct {
-	sig     shutdownSig
+	sig     shutdownMode
 	timeout <-chan time.Time
 }
 
@@ -86,11 +90,11 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 				return ErrShutdownGraceful
 			}
 		}
+	default:
+		// This code should never be reached! Urgent fix
+		// required if this error is ever returned!
+		return ErrIntegrityIssue
 	}
-
-	// This code should never be reached! Urgent fix
-	// required if this error is ever returned!
-	return ErrIntegrityIssue
 }
 
 // finishCurrentJob sends a stop request to the poller to tell it
