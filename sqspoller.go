@@ -5,18 +5,19 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"sync"
 	"time"
 )
 
 var (
-	ErrNoHandler = errors.New("ErrNoHandler: no handler set on Poller instance")
-
-	ErrHandlerTimeout = errors.New("ErrHandlerTimeout: handler took to long to process message")
-
-	ErrShutdownNow      = errors.New("ErrShutdownNow: poller was suddenly shutdown")
-	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
-
-	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
+	ErrNoHandler              = errors.New("ErrNoHandler: no handler set on poller instance")
+	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
+	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: handler took to long to process message")
+	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
+	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
+	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
+	ErrAlreadyRunning         = errors.New("ErrAlreadyShuttingDown: poller is already running")
+	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
 // Handler is a function which handles the incoming SQS
@@ -53,6 +54,7 @@ type Poller struct {
 	LastPollTime time.Time
 
 	running        bool           // true if Poller is in running state.
+	shuttingDown   bool           // true if Poller is in the process of shutting down.
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
@@ -63,27 +65,24 @@ type Poller struct {
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
 
+	mtx *sync.RWMutex
 	ctx context.Context
 }
 
 // New creates a new instance of the SQS Poller from an instance
-// of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
-// SQS queue will be polled.
-func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
+// of sqs.SQS.
+func New(sqsSvc *sqs.SQS) *Poller {
 	p := Poller{
 		client: sqsSvc,
-
-		queueURL: *config.QueueUrl,
 
 		shutdown:       make(chan *shutdown),
 		shutdownErrors: make(chan error, 1),
 		stopRequest:    make(chan struct{}, 1),
 		stopConfirmed:  make(chan struct{}),
 
-		receiveMsgInput: &config,
-		options:         options,
-		middleware:      make([]Middleware, 0),
+		middleware: make([]Middleware, 0),
 
+		mtx: &sync.RWMutex{},
 		ctx: context.Background(),
 	}
 
@@ -91,11 +90,10 @@ func New(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Opt
 }
 
 // Default creates a new instance of the SQS Poller from an instance
-// of sqs.SQS and an sqs.ReceiveMessageInput, to configure how the
-// SQS queue will be polled. It comes set up with the recommend middleware
+// of sqs.SQS. It also comes set up with the recommend middleware
 // plugged in.
-func Default(sqsSvc *sqs.SQS, config sqs.ReceiveMessageInput, options ...request.Option) *Poller {
-	p := New(sqsSvc, config, options...)
+func Default(sqsSvc *sqs.SQS) *Poller {
+	p := New(sqsSvc)
 	p.Use(IgnoreEmptyResponses())
 	p.Use(Tracking())
 	return p
@@ -111,13 +109,18 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 // Run starts the poller, the poller will continuously poll SQS until
 // an error is returned, or explicitly told to shutdown.
 func (p *Poller) Run() error {
-	p.running = true
-	defer func() {
-		p.running = false
-	}()
+	//======================================================================
+	// Validate Run
+	if err := p.checkAndSetRunningStatus(); err != nil {
+		return err
+	}
+	defer p.resetRunState()
 
 	if p.handler == nil {
 		return ErrNoHandler
+	}
+	if p.receiveMsgInput == nil {
+		return ErrNoReceiveMessageParams
 	}
 
 	ctx, cancel := context.WithCancel(p.ctx)
@@ -171,7 +174,7 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 				handlerError <- nil
 			}()
 
-			if err := p.waitOnHandling(ctx, handlerError); err != nil {
+			if err := p.waitForHandler(ctx, handlerError); err != nil {
 				errorChan <- err
 				return
 			}

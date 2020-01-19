@@ -53,7 +53,8 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 
 	// ==============================================================
 	// Create new poller using local queue.
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -90,10 +91,11 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 func (p *PollerTests) ShutdownNow(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
+
 
 	// ==============================================================
 	// Set up empty handler.
@@ -131,8 +133,8 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -195,8 +197,8 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -236,8 +238,8 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -276,8 +278,8 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 func (p *PollerTests) HandlerTimeout(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -300,8 +302,8 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 func (p *PollerTests) LastPollTime(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -344,8 +346,8 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.Default(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.Default(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
