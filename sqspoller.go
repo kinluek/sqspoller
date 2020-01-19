@@ -109,6 +109,8 @@ func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
 // Run starts the poller, the poller will continuously poll SQS until
 // an error is returned, or explicitly told to shutdown.
 func (p *Poller) Run() error {
+	//======================================================================
+	// Validate Run
 	if err := p.checkAndSetRunningStatus(); err != nil {
 		return err
 	}
@@ -172,7 +174,7 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 				handlerError <- nil
 			}()
 
-			if err := p.waitOnHandling(ctx, handlerError); err != nil {
+			if err := p.waitForHandler(ctx, handlerError); err != nil {
 				errorChan <- err
 				return
 			}
