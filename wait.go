@@ -5,11 +5,11 @@ import (
 	"time"
 )
 
-// waitOnHandling waits for the handler to return its error
-// if a cancellation or timeout signal received before the
-// handler can finish processing the current job, then the function
-// returns a non nil error to tell the poller to exit.
-func (p *Poller) waitOnHandling(ctx context.Context, handlerErrors <-chan error) error {
+// waitForHandler waits for the handler to return it's error,
+// if a cancellation or timeout signal is received before the
+// handler can finish processing the current job, then the
+// function returns a non nil error to tell the poller to exit.
+func (p *Poller) waitForHandler(ctx context.Context, handlerErrors <-chan error) error {
 
 	timeoutHandling := make(chan time.Time, 1)
 

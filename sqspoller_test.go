@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
 	"github.com/kinluek/sqspoller/internal/testing/setup"
+	"sync"
 	"testing"
 	"time"
 )
@@ -30,6 +31,8 @@ func TestPoller(t *testing.T) {
 	t.Run("LastPollTime updates", Test.LastPollTime)
 
 	t.Run("default poller - ctx has CtxTackingValue", Test.DefaultPollerContextValue)
+
+	t.Run("race - shutdown", Test.RaceShutdown)
 }
 
 // PollerTests holds the tests for the Poller
@@ -53,7 +56,8 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 
 	// ==============================================================
 	// Create new poller using local queue.
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -63,7 +67,7 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 	// error is returned.
 	confirmedRunning := errors.New("started and exited")
 
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		if len(msgOut.Messages) > 0 {
 			if *msgOut.Messages[0].Body != messageBody {
 				t.Fatalf("received message body: %v, wanted: %v", *msgOut.Messages[0].Body, messageBody)
@@ -90,14 +94,14 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 func (p *PollerTests) ShutdownNow(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
 	// ==============================================================
 	// Set up empty handler.
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(time.Second)
 		return nil
 	}
@@ -131,8 +135,8 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -143,7 +147,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	var confirmed bool
 	shutdownFinished := make(chan error)
 
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 
 		// use channels to confirm shutdown waits for
 		// the requests to finish handling before shutting down.
@@ -195,14 +199,14 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
 	// ==============================================================
 	// Set up empty handler.
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(200 * time.Millisecond)
 		return nil
 	}
@@ -236,14 +240,14 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
 	// ==============================================================
 	// Set up empty handler.
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(500 * time.Millisecond)
 		return nil
 	}
@@ -276,8 +280,8 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 func (p *PollerTests) HandlerTimeout(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -285,7 +289,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 
 	// ==============================================================
 	// Set up Handler - make sure handler runs for longer than HandlerTimeout
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(time.Second)
 		return nil
 	}
@@ -300,14 +304,14 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 func (p *PollerTests) LastPollTime(t *testing.T) {
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.New(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
 	// ==============================================================
 	// Set up Handler
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		return nil
 	}
 	poller.Handle(handler)
@@ -344,8 +348,8 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 
 	// ==============================================================
 	// Create new poller using local queue.
-
-	poller := sqspoller.Default(p.sqsClient, sqs.ReceiveMessageInput{
+	poller := sqspoller.Default(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
@@ -353,7 +357,7 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 	// Set up Handler - confirm that sqspoller.CtxTackingValue is contained
 	// within ctx object.
 
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
@@ -369,6 +373,66 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 	poller.Handle(handler)
 	if err := poller.Run(); err != nil {
 		t.Fatalf("poller should not have returned error: %v", err)
+	}
+
+}
+
+func (p *PollerTests) RaceShutdown(t *testing.T) {
+	t.Skip("RaceShutdown: cannot guarantee race condition will be met")
+	// ==============================================================
+	// Create new poller using local queue.
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	c := sync.NewCond(&sync.Mutex{})
+
+	// ==============================================================
+	// Set up Handler
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+		c.Broadcast()
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	poller.Handle(handler)
+
+	go func() {
+		poller.Run()
+	}()
+
+	shutdownErrors := make(chan error, 2)
+
+	var shutdownCalls sync.WaitGroup
+	shutdownCalls.Add(2)
+
+	go func() {
+		defer shutdownCalls.Done()
+		c.L.Lock()
+		defer c.L.Unlock()
+		c.Wait()
+		shutdownErrors <- poller.ShutdownGracefully()
+	}()
+	go func() {
+		defer shutdownCalls.Done()
+		c.L.Lock()
+		defer c.L.Unlock()
+		c.Wait()
+		shutdownErrors <- poller.ShutdownGracefully()
+	}()
+
+	shutdownCalls.Wait()
+	close(shutdownErrors)
+
+	var confirmedErr bool
+	for err := range shutdownErrors {
+		if err == sqspoller.ErrAlreadyShuttingDown {
+			confirmedErr = true
+		}
+	}
+	if !confirmedErr {
+		t.Fatalf("unexpected error returned for shutdown, expected ErrAlreadyShuttingDown")
 	}
 
 }

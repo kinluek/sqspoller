@@ -5,24 +5,32 @@ import (
 	"time"
 )
 
-type shutdownSig int
+// shutdownMode represents a mode of shutdown
+type shutdownMode int
 
 const (
-	now shutdownSig = iota
+	// shutdown modes:
+	now shutdownMode = iota
 	graceful
 	after
 )
 
+// shutdown holds information needed to perform
+// the required shutdown.
 type shutdown struct {
-	sig     shutdownSig
+	sig     shutdownMode
 	timeout <-chan time.Time
 }
 
 // ShutdownGracefully gracefully shuts down the poller.
 func (p *Poller) ShutdownGracefully() error {
-	if !p.running {
+	if !p.isRunning() {
 		return nil
 	}
+	if err := p.checkAndSetShuttingDownStatus(); err != nil {
+		return err
+	}
+
 	p.shutdown <- &shutdown{
 		sig:     graceful,
 		timeout: nil,
@@ -35,9 +43,13 @@ func (p *Poller) ShutdownGracefully() error {
 // time frame, the Poller will exit, potentially leaking
 // unhandled resources.
 func (p *Poller) ShutdownAfter(t time.Duration) error {
-	if !p.running {
+	if !p.isRunning() {
 		return nil
 	}
+	if err := p.checkAndSetShuttingDownStatus(); err != nil {
+		return err
+	}
+
 	p.shutdown <- &shutdown{
 		sig:     after,
 		timeout: time.After(t),
@@ -48,9 +60,13 @@ func (p *Poller) ShutdownAfter(t time.Duration) error {
 // ShutdownNow shuts down the Poller instantly,
 // potentially leaking unhandled resources.
 func (p *Poller) ShutdownNow() error {
-	if !p.running {
+	if !p.isRunning() {
 		return nil
 	}
+	if err := p.checkAndSetShuttingDownStatus(); err != nil {
+		return err
+	}
+
 	p.shutdown <- &shutdown{
 		sig:     now,
 		timeout: nil,
@@ -86,11 +102,11 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 				return ErrShutdownGraceful
 			}
 		}
+	default:
+		// This code should never be reached! Urgent fix
+		// required if this error is ever returned!
+		return ErrIntegrityIssue
 	}
-
-	// This code should never be reached! Urgent fix
-	// required if this error is ever returned!
-	return ErrIntegrityIssue
 }
 
 // finishCurrentJob sends a stop request to the poller to tell it
