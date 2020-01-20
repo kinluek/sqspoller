@@ -46,7 +46,7 @@ func Test_wrapMiddleware(t *testing.T) {
 		return nil
 	}
 
-	wrappedHandler := wrapMiddleware([]Middleware{middleWare1, middleWare2}, handler)
+	wrappedHandler := wrapMiddleware(handler, middleWare1, middleWare2)
 
 	if err := wrappedHandler(context.Background(), &sqs.SQS{}, &MessageOutput{}, nil); err != nil {
 		t.Fatalf("wrappedHandler should not have returned an error: %v", err)
