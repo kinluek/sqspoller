@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
 	"github.com/kinluek/sqspoller/internal/testing/setup"
+	"sync"
 	"testing"
 	"time"
 )
@@ -30,6 +31,8 @@ func TestPoller(t *testing.T) {
 	t.Run("LastPollTime updates", Test.LastPollTime)
 
 	t.Run("default poller - ctx has CtxTackingValue", Test.DefaultPollerContextValue)
+
+	t.Run("race - shutdown", Test.RaceShutdown)
 }
 
 // PollerTests holds the tests for the Poller
@@ -95,7 +98,6 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
-
 
 	// ==============================================================
 	// Set up empty handler.
@@ -371,6 +373,66 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 	poller.Handle(handler)
 	if err := poller.Run(); err != nil {
 		t.Fatalf("poller should not have returned error: %v", err)
+	}
+
+}
+
+func (p *PollerTests) RaceShutdown(t *testing.T) {
+	t.Skip("RaceShutdown: cannot guarantee race condition will be met")
+	// ==============================================================
+	// Create new poller using local queue.
+	poller := sqspoller.New(p.sqsClient)
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
+		QueueUrl: p.queueURL,
+	})
+
+	c := sync.NewCond(&sync.Mutex{})
+
+	// ==============================================================
+	// Set up Handler
+	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+		c.Broadcast()
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	poller.Handle(handler)
+
+	go func() {
+		poller.Run()
+	}()
+
+	shutdownErrors := make(chan error, 2)
+
+	var shutdownCalls sync.WaitGroup
+	shutdownCalls.Add(2)
+
+	go func() {
+		defer shutdownCalls.Done()
+		c.L.Lock()
+		defer c.L.Unlock()
+		c.Wait()
+		shutdownErrors <- poller.ShutdownGracefully()
+	}()
+	go func() {
+		defer shutdownCalls.Done()
+		c.L.Lock()
+		defer c.L.Unlock()
+		c.Wait()
+		shutdownErrors <- poller.ShutdownGracefully()
+	}()
+
+	shutdownCalls.Wait()
+	close(shutdownErrors)
+
+	var confirmedErr bool
+	for err := range shutdownErrors {
+		if err == sqspoller.ErrAlreadyShuttingDown {
+			confirmedErr = true
+		}
+	}
+	if !confirmedErr {
+		t.Fatalf("unexpected error returned for shutdown, expected ErrAlreadyShuttingDown")
 	}
 
 }
