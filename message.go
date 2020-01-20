@@ -10,8 +10,6 @@ import (
 type MessageOutput struct {
 	*sqs.ReceiveMessageOutput
 	Messages []*Message
-
-	client   *sqs.SQS
 	queueURL string
 }
 
@@ -23,6 +21,14 @@ type Message struct {
 
 	client   *sqs.SQS
 	queueURL string
+}
+
+// Delete removes the message from the queue, permanently.
+func (m *Message) Delete() (*sqs.DeleteMessageOutput, error) {
+	return m.client.DeleteMessage(&sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(m.queueURL),
+		ReceiptHandle: m.ReceiptHandle,
+	})
 }
 
 // convertMessage converts an sqs.ReceiveMessageOutput to
@@ -40,21 +46,6 @@ func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string)
 	return &MessageOutput{
 		ReceiveMessageOutput: msgOut,
 		Messages:             messages,
-		client:               svc,
 		queueURL:             qURL,
 	}
-}
-
-// DeleteMessageOutput wraps the sqs.DeleteMessageOutput output
-type DeleteMessageOutput struct {
-	*sqs.DeleteMessageOutput
-}
-
-// Delete removes the message from the queue, permanently.
-func (m *Message) Delete() (*DeleteMessageOutput, error) {
-	out, err := m.client.DeleteMessage(&sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(m.queueURL),
-		ReceiptHandle: m.ReceiptHandle,
-	})
-	return &DeleteMessageOutput{out}, err
 }
