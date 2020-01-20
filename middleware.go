@@ -40,8 +40,8 @@ func wrapMiddleware(middleware []Middleware, handler Handler) Handler {
 }
 
 // ctxKey is the package's context key type used to store
-// values on context.Context object to avoid clashing
-// with other packages.
+// values on context.Context object to avoid clashing with
+// other packages.
 type ctxKey int
 
 // CtxKey should be used to access the values on the context

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func Test_wrapMiddleware(t *testing.T) {
@@ -104,6 +105,43 @@ func TestIgnoreEmptyResponses(t *testing.T) {
 
 			if innerReached != tt.wantReached {
 				t.Fatalf("wanted wantReached to be %v, got %v", tt.wantReached, innerReached)
+			}
+		})
+	}
+
+}
+
+func TestHandlerTimeout(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		wantErr error
+	}{
+		{
+			name:    "timeout occurred",
+			timeout: 0,
+			wantErr: ErrHandlerTimeout,
+		},
+		{
+			name:    "no timeout",
+			timeout: 2 * time.Second,
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inner := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+				time.Sleep(time.Second)
+				return nil
+			}
+
+			handler := HandlerTimeout(tt.timeout)(inner)
+			err := handler(context.Background(), &MessageOutput{}, nil)
+
+			if err != tt.wantErr {
+				t.Fatalf("wanted err: %v, got %v", tt.wantErr, err)
 			}
 		})
 	}
