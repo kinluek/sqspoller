@@ -11,23 +11,35 @@ import (
 // to add functionality before or after the Handler code.
 type Middleware func(Handler) Handler
 
-// Use attaches global middleware to the Poller instance which will
-// wrap any Handler and Handler specific middleware.
+// Use attaches global outerMiddleware to the Poller instance which will
+// wrap any Handler and Handler specific outerMiddleware.
 func (p *Poller) Use(middleware ...Middleware) {
-	if p.middleware == nil {
-		p.middleware = middleware
+	if p.outerMiddleware == nil {
+		p.outerMiddleware = middleware
 	} else {
-		p.middleware = append(p.middleware, middleware...)
+		p.outerMiddleware = append(p.outerMiddleware, middleware...)
 	}
 }
 
-// wrapMiddleware creates a new handler by wrapping middleware around a final
+// getWrappedHandler applies the middle middleware to the handler in
+// the correct order before returning it.
+func (p *Poller) getWrappedHandler() Handler {
+	handler := p.handler
+	if p.HandlerTimeout > 0 {
+		handler = wrapMiddleware(handler, HandlerTimeout(p.HandlerTimeout))
+	}
+	handler = wrapMiddleware(handler, p.innerMiddleware...)
+	handler = wrapMiddleware(handler, p.outerMiddleware...)
+	return handler
+}
+
+// wrapMiddleware creates a new handler by wrapping outerMiddleware around a final
 // handler. The middlewares' Handlers will be executed by requests in the order
 // they are provided.
-func wrapMiddleware(middleware []Middleware, handler Handler) Handler {
+func wrapMiddleware(handler Handler, middleware ...Middleware) Handler {
 
 	// start wrapping the handler from the end of the
-	// middleware slice, to the start, this will ensure
+	// outerMiddleware slice, to the start, this will ensure
 	// the code is executed in the right order when, the
 	// resulting handler is executed.
 	for i := len(middleware) - 1; i >= 0; i-- {
@@ -48,18 +60,18 @@ type ctxKey int
 // CtxKey should be used to access the values on the context
 // object of type *CtxTackingValue.
 //
-// This can only be used if the Tracking middleware has been
+// This can only be used if the Tracking outerMiddleware has been
 // used. The Poller returned by Default() comes with this
-// middleware installed.
+// outerMiddleware installed.
 const CtxKey ctxKey = 1
 
 // CtxTackingValue represents the values stored on the
 // context object about the message response which is passed
-// down through the handler function and middleware.
+// down through the handler function and outerMiddleware.
 //
-// This can only be used if the Tracking middleware has been
+// This can only be used if the Tracking outerMiddleware has been
 // used. The Poller returned by Default() comes with this
-// middleware installed.
+// outerMiddleware installed.
 type CtxTackingValue struct {
 	TraceID string
 	Now     time.Time
@@ -96,7 +108,6 @@ func IgnoreEmptyResponses() Middleware {
 
 	f := func(handler Handler) Handler {
 
-		// new handler
 		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
 
 			// validate messages exist, if no messages exist, do
@@ -116,7 +127,7 @@ func IgnoreEmptyResponses() Middleware {
 
 // HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if
 // the handler cannot process the message within that time. The user can then
-// use other middleware to check for ErrHandlerTimeout and decide whether to
+// use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
 // exit or move onto the next poll request.
 func HandlerTimeout(t time.Duration) Middleware {
 

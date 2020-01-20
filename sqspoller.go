@@ -26,7 +26,7 @@ var (
 // When making Handlers to be used by the Poller, make
 // sure the error value is checked first, before any
 // business logic code, unless you have created an error
-// checking middleware that wraps the core Handler.
+// checking outerMiddleware that wraps the core Handler.
 //
 // If the error is non-nil, it will be of type *awserr.Error
 // which is returned from a failed receive message request from
@@ -65,7 +65,8 @@ type Poller struct {
 	stopConfirmed  chan struct{}  // channel to send confirmation that polling has been blocked
 
 	handler         Handler
-	middleware      []Middleware
+	outerMiddleware []Middleware
+	innerMiddleware []Middleware
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
 
@@ -84,7 +85,7 @@ func New(sqsSvc *sqs.SQS) *Poller {
 		stopRequest:    make(chan struct{}, 1),
 		stopConfirmed:  make(chan struct{}),
 
-		middleware: make([]Middleware, 0),
+		outerMiddleware: make([]Middleware, 0),
 
 		mtx: &sync.RWMutex{},
 		ctx: context.Background(),
@@ -94,7 +95,7 @@ func New(sqsSvc *sqs.SQS) *Poller {
 }
 
 // Default creates a new instance of the SQS Poller from an instance
-// of sqs.SQS. It also comes set up with the recommend middleware
+// of sqs.SQS. It also comes set up with the recommend outerMiddleware
 // plugged in.
 func Default(sqsSvc *sqs.SQS) *Poller {
 	p := New(sqsSvc)
@@ -103,11 +104,13 @@ func Default(sqsSvc *sqs.SQS) *Poller {
 	return p
 }
 
-// Handle attaches a Handler to the Poller instance, if a Handler already
-// exists on the Poller instance, it will be replaced.
+// Handle attaches a Handler to the Poller instance, if a Handler
+// already exists on the Poller instance, it will be replaced. The
+// Middleware supplied to Handle will be applied first before any
+// global middleware which are set by Use().
 func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
-	handler = wrapMiddleware(middleware, handler)
 	p.handler = handler
+	p.innerMiddleware = middleware
 }
 
 // Run starts the poller, the poller will continuously poll SQS until
@@ -130,8 +133,8 @@ func (p *Poller) Run() error {
 	ctx, cancel := context.WithCancel(p.ctx)
 
 	//======================================================================
-	// Apply Global Middleware upon starting
-	handler := wrapMiddleware(p.middleware, p.handler)
+	// Apply Middleware upon starting
+	handler := p.getWrappedHandler()
 
 	//======================================================================
 	// Start Polling
