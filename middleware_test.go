@@ -3,6 +3,7 @@ package sqspoller
 import (
 	"context"
 	"errors"
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"testing"
 	"time"
 )
@@ -17,9 +18,9 @@ func Test_wrapMiddleware(t *testing.T) {
 	text := ""
 
 	middleWare1 := func(handler Handler) Handler {
-		h := func(ctx context.Context, msg *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msg *MessageOutput, err error) error {
 			text += "1"
-			if err := handler(ctx, msg, err); err != nil {
+			if err := handler(ctx, client, msg, err); err != nil {
 				return err
 			}
 			text += "1"
@@ -29,9 +30,9 @@ func Test_wrapMiddleware(t *testing.T) {
 	}
 
 	middleWare2 := func(handler Handler) Handler {
-		h := func(ctx context.Context, msg *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msg *MessageOutput, err error) error {
 			text += "2"
-			if err := handler(ctx, msg, err); err != nil {
+			if err := handler(ctx, client, msg, err); err != nil {
 				return err
 			}
 			text += "2"
@@ -40,14 +41,14 @@ func Test_wrapMiddleware(t *testing.T) {
 		return h
 	}
 
-	handler := func(ctx context.Context, msg *MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msg *MessageOutput, err error) error {
 		text += "handler"
 		return nil
 	}
 
 	wrappedHandler := wrapMiddleware([]Middleware{middleWare1, middleWare2}, handler)
 
-	if err := wrappedHandler(context.Background(), &MessageOutput{}, nil); err != nil {
+	if err := wrappedHandler(context.Background(), &sqs.SQS{}, &MessageOutput{}, nil); err != nil {
 		t.Fatalf("wrappedHandler should not have returned an error: %v", err)
 	}
 
@@ -95,13 +96,13 @@ func TestIgnoreEmptyResponses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var innerReached bool
 
-			inner := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+			inner := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
 				innerReached = true
 				return errors.New("inner error")
 			}
 
 			handler := IgnoreEmptyResponses()(inner)
-			handler(context.Background(), &MessageOutput{Messages: tt.messages}, tt.Err)
+			handler(context.Background(), &sqs.SQS{}, &MessageOutput{Messages: tt.messages}, tt.Err)
 
 			if innerReached != tt.wantReached {
 				t.Fatalf("wanted wantReached to be %v, got %v", tt.wantReached, innerReached)
@@ -132,13 +133,13 @@ func TestHandlerTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inner := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+			inner := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
 				time.Sleep(time.Second)
 				return nil
 			}
 
 			handler := HandlerTimeout(tt.timeout)(inner)
-			err := handler(context.Background(), &MessageOutput{}, nil)
+			err := handler(context.Background(), &sqs.SQS{}, &MessageOutput{}, nil)
 
 			if err != tt.wantErr {
 				t.Fatalf("wanted err: %v, got %v", tt.wantErr, err)

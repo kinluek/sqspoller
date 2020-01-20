@@ -29,9 +29,13 @@ var (
 // checking middleware that wraps the core Handler.
 //
 // If the error is non-nil, it will be of type *awserr.Error
-// which is returned from a failed request for message from
+// which is returned from a failed receive message request from
 // SQS.
-type Handler func(ctx context.Context, msgOutput *MessageOutput, err error) error
+//
+// The sqs Client used to instantiate the poller will also
+// be made available to allow the user to perform standard
+// sqs operations.
+type Handler func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error
 
 // Poller is an instance of the polling framework, it contains
 // the SQS client and provides a simple API for polling an SQS
@@ -167,7 +171,7 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 			// Call Handler with message request results.
 			handlerError := make(chan error)
 			go func() {
-				if err := handler(ctx, convertMessage(out, p.client, p.queueURL), err); err != nil {
+				if err := handler(ctx, p.client, convertMessage(out, p.client, p.queueURL), err); err != nil {
 					handlerError <- err
 					return
 				}

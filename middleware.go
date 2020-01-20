@@ -2,6 +2,7 @@ package sqspoller
 
 import (
 	"context"
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/google/uuid"
 	"time"
 )
@@ -73,14 +74,14 @@ func Tracking() Middleware {
 
 	f := func(handler Handler) Handler {
 
-		h := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
 			v := &CtxTackingValue{
 				TraceID: uuid.New().String(),
 				Now:     time.Now(),
 			}
 			ctx = context.WithValue(ctx, CtxKey, v)
 
-			return handler(ctx, msgOutput, err)
+			return handler(ctx, client, msgOutput, err)
 		}
 
 		return h
@@ -96,7 +97,7 @@ func IgnoreEmptyResponses() Middleware {
 	f := func(handler Handler) Handler {
 
 		// new handler
-		h := func(ctx context.Context, msgOutput *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
 
 			// validate messages exist, if no messages exist, do
 			// not pass down the output and return nil
@@ -104,7 +105,7 @@ func IgnoreEmptyResponses() Middleware {
 				return nil
 			}
 
-			return handler(ctx, msgOutput, err)
+			return handler(ctx, client, msgOutput, err)
 		}
 
 		return h
@@ -121,7 +122,7 @@ func HandlerTimeout(t time.Duration) Middleware {
 
 	f := func(handler Handler) Handler {
 
-		h := func(ctx context.Context, msgOut *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput, err error) error {
 			ctx, cancel := context.WithCancel(ctx)
 
 			timer := time.NewTimer(t)
@@ -129,7 +130,7 @@ func HandlerTimeout(t time.Duration) Middleware {
 
 			handlerErrors := make(chan error)
 			go func() {
-				handlerErrors <- handler(ctx, msgOut, err)
+				handlerErrors <- handler(ctx, client, msgOut, err)
 			}()
 
 			select {

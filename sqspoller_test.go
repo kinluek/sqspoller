@@ -67,7 +67,7 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 	// error is returned.
 	confirmedRunning := errors.New("started and exited")
 
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		if len(msgOut.Messages) > 0 {
 			if *msgOut.Messages[0].Body != messageBody {
 				t.Fatalf("received message body: %v, wanted: %v", *msgOut.Messages[0].Body, messageBody)
@@ -101,7 +101,7 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 
 	// ==============================================================
 	// Set up empty handler.
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(time.Second)
 		return nil
 	}
@@ -147,7 +147,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	var confirmed bool
 	shutdownFinished := make(chan error)
 
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 
 		// use channels to confirm shutdown waits for
 		// the requests to finish handling before shutting down.
@@ -206,7 +206,7 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 
 	// ==============================================================
 	// Set up empty handler.
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(200 * time.Millisecond)
 		return nil
 	}
@@ -247,7 +247,7 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 
 	// ==============================================================
 	// Set up empty handler.
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(500 * time.Millisecond)
 		return nil
 	}
@@ -289,7 +289,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 
 	// ==============================================================
 	// Set up Handler - make sure handler runs for longer than HandlerTimeout
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		time.Sleep(time.Second)
 		return nil
 	}
@@ -311,7 +311,7 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 
 	// ==============================================================
 	// Set up Handler
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		return nil
 	}
 	poller.Handle(handler)
@@ -357,7 +357,7 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 	// Set up Handler - confirm that sqspoller.CtxTackingValue is contained
 	// within ctx object.
 
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
@@ -390,7 +390,7 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 
 	// ==============================================================
 	// Set up Handler
-	handler := func(ctx context.Context, msgOut *sqspoller.MessageOutput, err error) error {
+	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
 		c.Broadcast()
 		time.Sleep(time.Second)
 		return nil
