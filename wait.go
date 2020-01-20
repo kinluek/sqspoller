@@ -10,27 +10,11 @@ import (
 // handler can finish processing the current job, then the
 // function returns a non nil error to tell the poller to exit.
 func (p *Poller) waitForHandler(ctx context.Context, handlerErrors <-chan error) error {
-
-	timeoutHandling := make(chan time.Time, 1)
-
-	// if HandlerTimeout has been set, spin off a go routine
-	// to handle the timeout signal
-	if p.HandlerTimeout > 0 {
-		go func() {
-			timer := time.NewTimer(p.HandlerTimeout)
-			defer timer.Stop()
-			t := <-timer.C
-			timeoutHandling <- t
-		}()
-	}
-
 	select {
 	case err := <-handlerErrors:
 		if err != nil {
 			return err
 		}
-	case <-timeoutHandling:
-		return ErrHandlerTimeout
 	case <-ctx.Done():
 		if err := <-handlerErrors; err != nil {
 			return err

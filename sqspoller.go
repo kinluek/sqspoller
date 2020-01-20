@@ -3,7 +3,6 @@ package sqspoller
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"sync"
@@ -175,7 +174,6 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 			// Call Handler with message request results.
 			handlerError := make(chan error)
 			go func() {
-				fmt.Println("calling handler")
 				if err := handler(ctx, p.client, convertMessage(out, p.client, p.queueURL), err); err != nil {
 					handlerError <- err
 					return
