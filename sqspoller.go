@@ -181,11 +181,11 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 				handlerError <- nil
 			}()
 
-			if err := p.waitForHandler(ctx, handlerError); err != nil {
+			if err := waitForHandler(ctx, handlerError); err != nil {
 				errorChan <- err
 				return
 			}
-			if err := p.waitForNextPoll(ctx); err != nil {
+			if err := waitForInterval(ctx, p.PollInterval); err != nil {
 				errorChan <- err
 				return
 			}

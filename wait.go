@@ -6,10 +6,10 @@ import (
 )
 
 // waitForHandler waits for the handler to return it's error,
-// if a cancellation or timeout signal is received before the
-// handler can finish processing the current job, then the
-// function returns a non nil error to tell the poller to exit.
-func (p *Poller) waitForHandler(ctx context.Context, handlerErrors <-chan error) error {
+// if a cancellation signal is received before the handler can
+// finish processing the current job, then the function returns
+// a non nil error to tell the poller to exit.
+func waitForHandler(ctx context.Context, handlerErrors <-chan error) error {
 	select {
 	case err := <-handlerErrors:
 		if err != nil {
@@ -25,10 +25,10 @@ func (p *Poller) waitForHandler(ctx context.Context, handlerErrors <-chan error)
 	return nil
 }
 
-// waitForNextPoll handles the time interval to wait till
-// the next poll request is made.
-func (p *Poller) waitForNextPoll(ctx context.Context) error {
-	nextPoll := time.NewTimer(p.PollInterval)
+// waitForInterval waits for the given interval time before moving
+// on, unless the context object is cancelled first.
+func waitForInterval(ctx context.Context, interval time.Duration) error {
+	nextPoll := time.NewTimer(interval)
 	defer nextPoll.Stop()
 
 	select {
