@@ -5,34 +5,17 @@ import (
 	"time"
 )
 
-// waitForHandler waits for the handler to return it's error,
-// if a cancellation or timeout signal is received before the
-// handler can finish processing the current job, then the
-// function returns a non nil error to tell the poller to exit.
-func (p *Poller) waitForHandler(ctx context.Context, handlerErrors <-chan error) error {
-
-	timeoutHandling := make(chan time.Time, 1)
-
-	// if HandlerTimeout has been set, spin off a go routine
-	// to handle the timeout signal
-	if p.HandlerTimeout > 0 {
-		go func() {
-			timer := time.NewTimer(p.HandlerTimeout)
-			defer timer.Stop()
-			t := <-timer.C
-			timeoutHandling <- t
-		}()
-	}
-
+// waitForError waits for the error channel to return it's error,
+// if a cancellation signal is received before the error from the
+// channel is received, the function will exit with a non nil error.
+func waitForError(ctx context.Context, errChan <-chan error) error {
 	select {
-	case err := <-handlerErrors:
+	case err := <-errChan:
 		if err != nil {
 			return err
 		}
-	case <-timeoutHandling:
-		return ErrHandlerTimeout
 	case <-ctx.Done():
-		if err := <-handlerErrors; err != nil {
+		if err := <-errChan; err != nil {
 			return err
 		}
 		return ctx.Err()
@@ -41,10 +24,10 @@ func (p *Poller) waitForHandler(ctx context.Context, handlerErrors <-chan error)
 	return nil
 }
 
-// waitForNextPoll handles the time interval to wait till
-// the next poll request is made.
-func (p *Poller) waitForNextPoll(ctx context.Context) error {
-	nextPoll := time.NewTimer(p.PollInterval)
+// waitForInterval waits for the given interval time before moving
+// on, unless the context object is cancelled first.
+func waitForInterval(ctx context.Context, interval time.Duration) error {
+	nextPoll := time.NewTimer(interval)
 	defer nextPoll.Stop()
 
 	select {
@@ -55,15 +38,3 @@ func (p *Poller) waitForNextPoll(ctx context.Context) error {
 	}
 }
 
-// checkForStopRequests is called at the end of a poll cycle
-// to check whether any stop requests have been made. If a stop
-// request is received, the function blocks the poller from making
-// anymore requests.
-func (p *Poller) checkForStopRequests() {
-	select {
-	case <-p.stopRequest:
-		p.stopConfirmed <- struct{}{}
-		<-p.stopRequest
-	default:
-	}
-}
