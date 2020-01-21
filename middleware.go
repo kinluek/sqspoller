@@ -21,18 +21,6 @@ func (p *Poller) Use(middleware ...Middleware) {
 	}
 }
 
-// getWrappedHandler applies the middle middleware to the handler in
-// the correct order before returning it.
-func (p *Poller) getWrappedHandler() Handler {
-	handler := p.handler
-	if p.HandlerTimeout > 0 {
-		handler = wrapMiddleware(handler, HandlerTimeout(p.HandlerTimeout))
-	}
-	handler = wrapMiddleware(handler, p.innerMiddleware...)
-	handler = wrapMiddleware(handler, p.outerMiddleware...)
-	return handler
-}
-
 // wrapMiddleware creates a new handler by wrapping outerMiddleware around a final
 // handler. The middlewares' Handlers will be executed by requests in the order
 // they are provided.
@@ -51,6 +39,56 @@ func wrapMiddleware(handler Handler, middleware ...Middleware) Handler {
 
 	return handler
 }
+
+
+// applyTimeout applies a timeout to the handler if the timeout is
+// greater than 0. If timeout is 0, then the function returns the
+// handler unchanged.
+func applyTimeout(handler Handler, timeout time.Duration) Handler {
+	if timeout > 0 {
+		handler = wrapMiddleware(handler, HandlerTimeout(timeout))
+	}
+	return handler
+}
+
+// HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if
+// the handler cannot process the message within that time. The user can then
+// use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
+// exit or move onto the next poll request.
+func HandlerTimeout(t time.Duration) Middleware {
+
+	f := func(handler Handler) Handler {
+
+		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput, err error) error {
+			ctx, cancel := context.WithCancel(ctx)
+
+			timer := time.NewTimer(t)
+			defer timer.Stop()
+
+			handlerErrors := make(chan error)
+			go func() {
+				handlerErrors <- handler(ctx, client, msgOut, err)
+			}()
+
+			select {
+			case err := <-handlerErrors:
+				if err != nil {
+					return err
+				}
+			case <-timer.C:
+				cancel()
+				return ErrHandlerTimeout
+			}
+
+			return nil
+		}
+
+		return h
+	}
+
+	return f
+}
+
 
 // ctxKey is the package's context key type used to store
 // values on context.Context object to avoid clashing with
@@ -117,44 +155,6 @@ func IgnoreEmptyResponses() Middleware {
 			}
 
 			return handler(ctx, client, msgOutput, err)
-		}
-
-		return h
-	}
-
-	return f
-}
-
-// HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if
-// the handler cannot process the message within that time. The user can then
-// use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
-// exit or move onto the next poll request.
-func HandlerTimeout(t time.Duration) Middleware {
-
-	f := func(handler Handler) Handler {
-
-		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput, err error) error {
-			ctx, cancel := context.WithCancel(ctx)
-
-			timer := time.NewTimer(t)
-			defer timer.Stop()
-
-			handlerErrors := make(chan error)
-			go func() {
-				handlerErrors <- handler(ctx, client, msgOut, err)
-			}()
-
-			select {
-			case err := <-handlerErrors:
-				if err != nil {
-					return err
-				}
-			case <-timer.C:
-				cancel()
-				return ErrHandlerTimeout
-			}
-
-			return nil
 		}
 
 		return h

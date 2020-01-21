@@ -134,7 +134,10 @@ func (p *Poller) Run() error {
 
 	//======================================================================
 	// Apply Middleware upon starting
-	handler := p.getWrappedHandler()
+	handler := applyTimeout(p.handler, p.HandlerTimeout)
+
+	handler = wrapMiddleware(handler, p.innerMiddleware...)
+	handler = wrapMiddleware(handler, p.outerMiddleware...)
 
 	//======================================================================
 	// Start Polling
