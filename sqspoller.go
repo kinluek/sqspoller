@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"sync"
 	"time"
 )
 
@@ -57,8 +56,8 @@ type Poller struct {
 	// be checked periodically, to confirm the Poller is running as expected.
 	LastPollTime time.Time
 
-	running        bool           // true if Poller is in running state.
-	shuttingDown   bool           // true if Poller is in the process of shutting down.
+	running        int64          // 1 if Poller is in running state, 0 if not.
+	shuttingDown   int64          // 1 if Poller is in the process of shutting down, 0 if not.
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
@@ -69,9 +68,6 @@ type Poller struct {
 	innerMiddleware []Middleware
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
-
-	mtx *sync.RWMutex
-	ctx context.Context
 }
 
 // New creates a new instance of the SQS Poller from an instance
@@ -86,9 +82,6 @@ func New(sqsSvc *sqs.SQS) *Poller {
 		stopConfirmed:  make(chan struct{}),
 
 		outerMiddleware: make([]Middleware, 0),
-
-		mtx: &sync.RWMutex{},
-		ctx: context.Background(),
 	}
 
 	return &p
@@ -130,7 +123,7 @@ func (p *Poller) Run() error {
 		return ErrNoReceiveMessageParams
 	}
 
-	ctx, cancel := context.WithCancel(p.ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	//======================================================================
 	// Apply Middleware upon starting
