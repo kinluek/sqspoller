@@ -68,8 +68,6 @@ type Poller struct {
 	innerMiddleware []Middleware
 	receiveMsgInput *sqs.ReceiveMessageInput
 	options         []request.Option
-
-	ctx context.Context
 }
 
 // New creates a new instance of the SQS Poller from an instance
@@ -84,8 +82,6 @@ func New(sqsSvc *sqs.SQS) *Poller {
 		stopConfirmed:  make(chan struct{}),
 
 		outerMiddleware: make([]Middleware, 0),
-
-		ctx: context.Background(),
 	}
 
 	return &p
@@ -127,7 +123,7 @@ func (p *Poller) Run() error {
 		return ErrNoReceiveMessageParams
 	}
 
-	ctx, cancel := context.WithCancel(p.ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	//======================================================================
 	// Apply Middleware upon starting
