@@ -5,18 +5,17 @@ import (
 	"time"
 )
 
-// waitForHandler waits for the handler to return it's error,
-// if a cancellation signal is received before the handler can
-// finish processing the current job, then the function returns
-// a non nil error to tell the poller to exit.
-func waitForHandler(ctx context.Context, handlerErrors <-chan error) error {
+// waitForError waits for the error channel to return it's error,
+// if a cancellation signal is received before the error from the
+// channel is received, the function will exit with a non nil error.
+func waitForError(ctx context.Context, errChan <-chan error) error {
 	select {
-	case err := <-handlerErrors:
+	case err := <-errChan:
 		if err != nil {
 			return err
 		}
 	case <-ctx.Done():
-		if err := <-handlerErrors; err != nil {
+		if err := <-errChan; err != nil {
 			return err
 		}
 		return ctx.Err()
@@ -39,15 +38,3 @@ func waitForInterval(ctx context.Context, interval time.Duration) error {
 	}
 }
 
-// checkForStopRequests is called at the end of a poll cycle
-// to check whether any stop requests have been made. If a stop
-// request is received, the function blocks the poller from making
-// anymore requests.
-func (p *Poller) checkForStopRequests() {
-	select {
-	case <-p.stopRequest:
-		p.stopConfirmed <- struct{}{}
-		<-p.stopRequest
-	default:
-	}
-}

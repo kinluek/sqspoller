@@ -181,7 +181,7 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 				handlerError <- nil
 			}()
 
-			if err := waitForHandler(ctx, handlerError); err != nil {
+			if err := waitForError(ctx, handlerError); err != nil {
 				errorChan <- err
 				return
 			}
