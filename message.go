@@ -6,7 +6,7 @@ import (
 )
 
 // MessageOutput is contains the SQS ReceiveMessageOutput and
-// is passed down to the Handler when the Poller is running.
+// is passed down to the MessageHandler when the Poller is running.
 type MessageOutput struct {
 	*sqs.ReceiveMessageOutput
 	Messages []*Message

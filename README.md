@@ -43,7 +43,6 @@ import (
 )
 
 func main() {
-
 	// create SQS client.
 	sess := session.Must(session.NewSession())
 	sqsClient := sqs.New(sess)
@@ -62,19 +61,21 @@ func main() {
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages
-	poller.Handle(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput, err error) error {
-
-		// check errors returned from polling the queue.
-		if err != nil {
-			return err
-		}
+	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 		msg := msgOutput.Messages[0]
-
 		// do work on message
 		fmt.Println("GOT MESSAGE: ", msg)
-
 		// delete message from queue
 		if _, err := msg.Delete(); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	// supply handler to handle errors returned from poll requests to
+	// SQS returning a non nil error will cause the poller to exit.
+	poller.OnError(func(ctx context.Context, err error) error {
+		if err != nil {
 			return err
 		}
 		return nil
@@ -92,6 +93,7 @@ func main() {
 
 ```go
 func main() {
+	
 	poller := sqspoller.New(sqsClient)
 
 	// IgnoreEmptyResponses stops empty message outputs from reaching the core handler
@@ -100,7 +102,7 @@ func main() {
 	poller.Use(sqspoller.IgnoreEmptyResponses())
 
 	// Tracking adds tracking values to the context object which can be retrieved using
-	// sqspoller.CtxKey.
+	// sqspoller.TrackingKey.
 	poller.Use(sqspoller.Tracking())
 
 	// supply polling parameters.
@@ -109,16 +111,16 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
+	// configure poll interval and handler timeout
+	poller.SetPollInterval(30 * time.Second)
+	poller.SetHandlerTimeout(120 * time.Second)
+
 	// supply handler to handle new messages
-	poller.Handle(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput, err error) error {
-		// check errors returned from polling the queue.
-		if err != nil {
-			return err
-		}
+	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 		msg := msgOutput.Messages[0]
 
 		// get tracking values provided by Tracking middleware.
-		v, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
+		v, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
 		if !ok {
 			return errors.New("tracking middleware should have provided traced ID and receive time")
 		}
@@ -131,10 +133,6 @@ func main() {
 		}
 		return nil
 	})
-	
-	if err := poller.Run(); err != nil {
-		log.Fatal(err)
-	}
 }
 ```
 
@@ -174,7 +172,8 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
-	poller.Handle(Handler)
+	poller.OnMessage(messageHandler)
+	poller.OnError(errorHandler)
 
 	// run poller in a separate goroutine and wait for errors on channel
 	pollerErrors := make(chan error, 1)

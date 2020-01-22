@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
-	"log"
 	"time"
 )
 
@@ -27,7 +26,7 @@ func main() {
 	poller.Use(sqspoller.IgnoreEmptyResponses())
 
 	// Tracking adds tracking values to the context object which can be retrieved using
-	// sqspoller.CtxKey.
+	// sqspoller.TrackingKey.
 	poller.Use(sqspoller.Tracking())
 
 	// supply polling parameters.
@@ -41,15 +40,11 @@ func main() {
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages
-	poller.Handle(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput, err error) error {
-		// check errors returned from polling the queue.
-		if err != nil {
-			return err
-		}
+	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 		msg := msgOutput.Messages[0]
 
 		// get tracking values provided by Tracking middleware.
-		v, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
+		v, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
 		if !ok {
 			return errors.New("tracking middleware should have provided traced ID and receive time")
 		}
@@ -62,8 +57,4 @@ func main() {
 		}
 		return nil
 	})
-
-	if err := poller.Run(); err != nil {
-		log.Fatal(err)
-	}
 }

@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrNoHandler              = errors.New("ErrNoHandler: no handler set on poller instance")
+	ErrNoMessageHandler       = errors.New("ErrNoMessageHandler: no message handler set on poller instance")
+	ErrNoErrorHandler         = errors.New("ErrNoErrorHandler: no error handler set on poller instance")
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
-	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: handler took to long to process message")
+	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: handlerOnMsg took to long to process message")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
 	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
@@ -19,22 +20,22 @@ var (
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
-// Handler is a function which handles the incoming SQS
-// message.
-//
-// When making Handlers to be used by the Poller, make
-// sure the error value is checked first, before any
-// business logic code, unless you have created an error
-// checking outerMiddleware that wraps the core Handler.
-//
-// If the error is non-nil, it will be of type *awserr.Error
-// which is returned from a failed receive message request from
-// SQS.
+// MessageHandler is a function which handles the incoming
+// SQS message.
 //
 // The sqs Client used to instantiate the poller will also
 // be made available to allow the user to perform standard
 // sqs operations.
-type Handler func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error
+type MessageHandler func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error
+
+// ErrorHandler is a function which handlers errors returned
+// from sqs.ReceiveMessageWithContext. Returning nil from the
+// ErrorHandler will allow the poller to continue, returning
+// an error will cause the poller to exit.
+//
+// Errors should be of type awserr.Error, if the sqs.ReceiveMessageWithContext
+// function returns the errors as expected.
+type ErrorHandler func(ctx context.Context, err error) error
 
 // Poller is an instance of the polling framework, it contains
 // the SQS client and provides a simple API for polling an SQS
@@ -43,13 +44,13 @@ type Poller struct {
 	client   *sqs.SQS
 	queueURL string
 
-	// Time to wait for handler to process message, if handler function
-	// takes longer than this to return, then the program is exited.
+	// Time to wait for handlerOnMsg to process message, if handlerOnMsg
+	// function takes longer than this to return, then the program is exited.
 	HandlerTimeout time.Duration
 
-	// Time interval between each poll request. After a poll request
-	// has been made and response has been handled, the poller will
-	// wait for this amount of time before making the next call.
+	// Time interval between each poll request. After a poll request has been
+	// made and response has been handled, the poller will wait for this amount
+	// of time before making the next call.
 	PollInterval time.Duration
 
 	// Holds the time of the last poll request that was made. This can
@@ -63,11 +64,14 @@ type Poller struct {
 	stopRequest    chan struct{}  // channel to send request to block polling
 	stopConfirmed  chan struct{}  // channel to send confirmation that polling has been blocked
 
-	handler         Handler
-	outerMiddleware []Middleware
-	innerMiddleware []Middleware
-	receiveMsgInput *sqs.ReceiveMessageInput
-	options         []request.Option
+	handlerOnErr ErrorHandler // Handler used to handle message request errors
+
+	handlerOnMsg    MessageHandler // Handler used to handle successful message requests.
+	outerMiddleware []Middleware   // Outer middleware of handlerOnMsg.
+	innerMiddleware []Middleware   // Inner middleware of handlerOnMsg,
+
+	receiveMsgInput *sqs.ReceiveMessageInput // parameters to make message request to SQS.
+	options         []request.Option         // request options.
 }
 
 // New creates a new instance of the SQS Poller from an instance
@@ -97,13 +101,19 @@ func Default(sqsSvc *sqs.SQS) *Poller {
 	return p
 }
 
-// Handle attaches a Handler to the Poller instance, if a Handler
-// already exists on the Poller instance, it will be replaced. The
-// Middleware supplied to Handle will be applied first before any
-// global middleware which are set by Use().
-func (p *Poller) Handle(handler Handler, middleware ...Middleware) {
-	p.handler = handler
+// OnMessage attaches a MessageHandler to the Poller instance, if a
+// MessageHandler already exists on the Poller instance, it will be
+// replaced. The Middleware supplied to OnMessage will be applied first
+// before any global middleware set by Use().
+func (p *Poller) OnMessage(handler MessageHandler, middleware ...Middleware) {
+	p.handlerOnMsg = handler
 	p.innerMiddleware = middleware
+}
+
+// OnError attaches an ErrorHandler to the Poller instance. It is the
+// first line of defence against message request errors from SQS.
+func (p *Poller) OnError(handler ErrorHandler) {
+	p.handlerOnErr = handler
 }
 
 // Run starts the poller, the poller will continuously poll SQS until
@@ -116,8 +126,11 @@ func (p *Poller) Run() error {
 	}
 	defer p.resetRunState()
 
-	if p.handler == nil {
-		return ErrNoHandler
+	if p.handlerOnMsg == nil {
+		return ErrNoMessageHandler
+	}
+	if p.handlerOnErr == nil {
+		return ErrNoErrorHandler
 	}
 	if p.receiveMsgInput == nil {
 		return ErrNoReceiveMessageParams
@@ -127,7 +140,7 @@ func (p *Poller) Run() error {
 
 	//======================================================================
 	// Apply Middleware upon starting
-	handler := applyTimeout(p.handler, p.HandlerTimeout)
+	handler := applyTimeout(p.handlerOnMsg, p.HandlerTimeout)
 
 	handler = wrapMiddleware(handler, p.innerMiddleware...)
 	handler = wrapMiddleware(handler, p.outerMiddleware...)
@@ -137,7 +150,7 @@ func (p *Poller) Run() error {
 	pollingErrors := p.poll(ctx, handler)
 
 	//======================================================================
-	// Handle Polling errors, shutdown signals, heartbeats
+	// Handle polling errors and shutdown signals
 	for {
 		select {
 		case err := <-pollingErrors:
@@ -153,7 +166,7 @@ func (p *Poller) Run() error {
 
 // poll continuously polls the SQS queue in a separate goroutine,
 // the errors are returned on the returned channel.
-func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
+func (p *Poller) poll(ctx context.Context, handler MessageHandler) chan error {
 
 	errorChan := make(chan error)
 
@@ -164,13 +177,23 @@ func (p *Poller) poll(ctx context.Context, handler Handler) chan error {
 			p.LastPollTime = time.Now()
 			//======================================================================
 			// Make request to SQS queue for message
-			out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
+			out, sqsErr := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
 
 			//======================================================================
-			// Call Handler with message request results.
+			// Handle ReceiveMessageWithContext results
 			handlerError := make(chan error)
 			go func() {
-				if err := handler(ctx, p.client, convertMessage(out, p.client, p.queueURL), err); err != nil {
+				if sqsErr != nil {
+					// call error handler is sqs error is not nil.
+					if err := p.handlerOnErr(ctx, sqsErr); err != nil {
+						// if error was not resolved in handler
+						// then send error into channel and exit.
+						handlerError <- err
+						return
+					}
+				}
+				// handle message if there was no sqs error or if the error was resolved
+				if err := handler(ctx, p.client, convertMessage(out, p.client, p.queueURL)); err != nil {
 					handlerError <- err
 					return
 				}

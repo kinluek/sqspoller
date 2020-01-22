@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	// create SQS client.
 	sess := session.Must(session.NewSession())
 	sqsClient := sqs.New(sess)
@@ -31,19 +30,21 @@ func main() {
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages
-	poller.Handle(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput, err error) error {
-
-		// check errors returned from polling the queue.
-		if err != nil {
-			return err
-		}
+	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 		msg := msgOutput.Messages[0]
-
 		// do work on message
 		fmt.Println("GOT MESSAGE: ", msg)
-
 		// delete message from queue
 		if _, err := msg.Delete(); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	// supply handler to handle errors returned from poll requests to
+	// SQS returning a non nil error will cause the poller to exit.
+	poller.OnError(func(ctx context.Context, err error) error {
+		if err != nil {
 			return err
 		}
 		return nil

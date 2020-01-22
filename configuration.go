@@ -23,8 +23,8 @@ func (p *Poller) SetPollInterval(t time.Duration) {
 }
 
 // SetHandlerTimeout lets the user set the timeout for handling
-// a message, if the handler function cannot finish execution
-// within this time frame, the Handler will return ErrHandlerTimeout.
+// a message, if the handlerOnMsg function cannot finish execution
+// within this time frame, the MessageHandler will return ErrHandlerTimeout.
 // The error can be caught and handled by custom middleware, so
 // the  user can choose to move onto the next poll request if they
 // so wish.

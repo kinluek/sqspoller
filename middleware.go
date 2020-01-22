@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-// Middleware is a function which that wraps a Handler
-// to add functionality before or after the Handler code.
-type Middleware func(Handler) Handler
+// Middleware is a function which that wraps a MessageHandler
+// to add functionality before or after the MessageHandler code.
+type Middleware func(MessageHandler) MessageHandler
 
 // Use attaches global outerMiddleware to the Poller instance which will
-// wrap any Handler and Handler specific outerMiddleware.
+// wrap any MessageHandler and MessageHandler specific outerMiddleware.
 func (p *Poller) Use(middleware ...Middleware) {
 	if p.outerMiddleware == nil {
 		p.outerMiddleware = middleware
@@ -21,15 +21,15 @@ func (p *Poller) Use(middleware ...Middleware) {
 	}
 }
 
-// wrapMiddleware creates a new handler by wrapping outerMiddleware around a final
-// handler. The middlewares' Handlers will be executed by requests in the order
+// wrapMiddleware creates a new handlerOnMsg by wrapping outerMiddleware around a final
+// handlerOnMsg. The middlewares' Handlers will be executed by requests in the order
 // they are provided.
-func wrapMiddleware(handler Handler, middleware ...Middleware) Handler {
+func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHandler {
 
-	// start wrapping the handler from the end of the
+	// start wrapping the handlerOnMsg from the end of the
 	// outerMiddleware slice, to the start, this will ensure
 	// the code is executed in the right order when, the
-	// resulting handler is executed.
+	// resulting handlerOnMsg is executed.
 	for i := len(middleware) - 1; i >= 0; i-- {
 		mw := middleware[i]
 		if mw != nil {
@@ -40,11 +40,10 @@ func wrapMiddleware(handler Handler, middleware ...Middleware) Handler {
 	return handler
 }
 
-
-// applyTimeout applies a timeout to the handler if the timeout is
+// applyTimeout applies a timeout to the handlerOnMsg if the timeout is
 // greater than 0. If timeout is 0, then the function returns the
-// handler unchanged.
-func applyTimeout(handler Handler, timeout time.Duration) Handler {
+// handlerOnMsg unchanged.
+func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler {
 	if timeout > 0 {
 		handler = wrapMiddleware(handler, HandlerTimeout(timeout))
 	}
@@ -52,14 +51,14 @@ func applyTimeout(handler Handler, timeout time.Duration) Handler {
 }
 
 // HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if
-// the handler cannot process the message within that time. The user can then
+// the handlerOnMsg cannot process the message within that time. The user can then
 // use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
 // exit or move onto the next poll request.
 func HandlerTimeout(t time.Duration) Middleware {
 
-	f := func(handler Handler) Handler {
+	f := func(handler MessageHandler) MessageHandler {
 
-		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput) error {
 			ctx, cancel := context.WithCancel(ctx)
 
 			timer := time.NewTimer(t)
@@ -67,7 +66,7 @@ func HandlerTimeout(t time.Duration) Middleware {
 
 			handlerErrors := make(chan error)
 			go func() {
-				handlerErrors <- handler(ctx, client, msgOut, err)
+				handlerErrors <- handler(ctx, client, msgOut)
 			}()
 
 			select {
@@ -89,49 +88,44 @@ func HandlerTimeout(t time.Duration) Middleware {
 	return f
 }
 
-
 // ctxKey is the package's context key type used to store
 // values on context.Context object to avoid clashing with
 // other packages.
 type ctxKey int
 
-// CtxKey should be used to access the values on the context
-// object of type *CtxTackingValue.
-//
-// This can only be used if the Tracking outerMiddleware has been
-// used. The Poller returned by Default() comes with this
-// outerMiddleware installed.
-const CtxKey ctxKey = 1
+// TrackingKey should be used to access the values on the context
+// object of type *TackingValue placed by the Tacking middleware.
+const TrackingKey ctxKey = 1
 
-// CtxTackingValue represents the values stored on the
-// context object about the message response which is passed
-// down through the handler function and outerMiddleware.
+// TackingValue represents the values stored on the
+// context object placed by the Tracking middeware.
 //
-// This can only be used if the Tracking outerMiddleware has been
-// used. The Poller returned by Default() comes with this
-// outerMiddleware installed.
-type CtxTackingValue struct {
+// The Poller returned by Default() comes with this
+// middleware installed.
+type TackingValue struct {
 	TraceID string
 	Now     time.Time
 }
 
 // Tracking adds tracking information to the context object for each
 // message output received from the queue. The information can be
-// accessed on the context object by using the CtxKey constant and
-// returns a *CtxTackingValue object, containing a traceID and receive
+// accessed on the context object by using the TrackingKey constant and
+// returns a *TackingValue object, containing a traceID and receive
 // time.
 func Tracking() Middleware {
 
-	f := func(handler Handler) Handler {
+	f := func(handler MessageHandler) MessageHandler {
 
-		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
-			v := &CtxTackingValue{
+		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error {
+
+			// add tracking info to context object
+			v := &TackingValue{
 				TraceID: uuid.New().String(),
 				Now:     time.Now(),
 			}
-			ctx = context.WithValue(ctx, CtxKey, v)
+			ctx = context.WithValue(ctx, TrackingKey, v)
 
-			return handler(ctx, client, msgOutput, err)
+			return handler(ctx, client, msgOutput)
 		}
 
 		return h
@@ -141,20 +135,20 @@ func Tracking() Middleware {
 }
 
 // IgnoreEmptyResponses stops the data from being passed down
-// to the inner handler, if there is no message to be handled.
+// to the inner handlerOnMsg, if there is no message to be handled.
 func IgnoreEmptyResponses() Middleware {
 
-	f := func(handler Handler) Handler {
+	f := func(handler MessageHandler) MessageHandler {
 
-		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput, err error) error {
+		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error {
 
 			// validate messages exist, if no messages exist, do
 			// not pass down the output and return nil
-			if err == nil && len(msgOutput.Messages) == 0 || msgOutput.Messages == nil {
+			if msgOutput.Messages == nil || len(msgOutput.Messages) == 0 {
 				return nil
 			}
 
-			return handler(ctx, client, msgOutput, err)
+			return handler(ctx, client, msgOutput)
 		}
 
 		return h
