@@ -1,24 +1,3 @@
-[![kinluek](https://circleci.com/gh/kinluek/sqspoller.svg?style=shield)](https://circleci.com/gh/kinluek/sqspoller)
-
-# SQS-Poller
-SQS-Poller is a simple queue polling framework, designed specifically to work with AWS SQS.
-
-## Installation 
-
-1. Install sqspoller:
-```sh
-$ go get -u github.com/kinluek/sqspoller
-```
-
-2. Import code:
-```go
-import "github.com/kinluek/sqspoller"
-```
-
-## Quick Start
-
-```go
-// example.go
 package main
 
 import (
@@ -75,5 +54,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
-```
