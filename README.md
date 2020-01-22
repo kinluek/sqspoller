@@ -15,6 +15,15 @@ $ go get -u github.com/kinluek/sqspoller
 import "github.com/kinluek/sqspoller"
 ```
 
+## Features
+
+- Timeouts
+- Polling Intervals
+- Graceful Shutdowns
+- Middleware
+- Simple Message Delete Methods
+
+
 ## Quick Start
 
 ```go
