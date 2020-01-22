@@ -151,6 +151,38 @@ The ShutdownGracefully method waits for the handler to finish handling the curre
 ```go
  poller.ShutdownAfter(30*time.Second)
 ```
-The ShutdownAfter method attempts to shutdown gracefully within the given time, if the handler cannot complete it's current job within the given time, then the context object is cancelled at that time allowing the Run() function to exit. If the timeout happens before the poller can shutdown gracefully then ShutdownAfter returns error, ErrShutdownGraceful.
+The ShutdownAfter method attempts to shutdown gracefully within the given time, if the handler cannot complete it's current job within the given time, then the context object is cancelled at that time allowing the Run() function to exit.
 
+If the timeout happens before the poller can shutdown gracefully then ShutdownAfter returns error, ErrShutdownGraceful.
 
+```go
+func main() {
+	poller := sqspoller.Default(sqsClient)
+
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: aws.Int64(1),
+		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
+	})
+
+	poller.Handle(Handler)
+
+	// run poller in a separate goroutine and wait for errors on channel
+	pollerErrors := make(chan error, 1)
+	go func() {
+		pollerErrors <- poller.Run()
+	}()
+
+	// listen for shutdown signals
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-pollerErrors:
+		log.Fatal(err)
+	case <-shutdown:
+		if err := poller.ShutdownAfter(30 * time.Second); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+```
