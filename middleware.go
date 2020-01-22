@@ -117,6 +117,8 @@ func Tracking() Middleware {
 	f := func(handler MessageHandler) MessageHandler {
 
 		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error {
+
+			// add tracking info to context object
 			v := &TackingValue{
 				TraceID: uuid.New().String(),
 				Now:     time.Now(),
@@ -142,7 +144,7 @@ func IgnoreEmptyResponses() Middleware {
 
 			// validate messages exist, if no messages exist, do
 			// not pass down the output and return nil
-			if len(msgOutput.Messages) == 0 || msgOutput.Messages == nil {
+			if msgOutput.Messages == nil || len(msgOutput.Messages) == 0 {
 				return nil
 			}
 

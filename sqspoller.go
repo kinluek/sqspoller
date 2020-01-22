@@ -33,8 +33,8 @@ type MessageHandler func(ctx context.Context, client *sqs.SQS, msgOutput *Messag
 // ErrorHandler will allow the poller to continue, returning
 // an error will cause the poller to exit.
 //
-// Errors should be of type *awserr.Error, if the
-// sqs.ReceiveMessageWithContext returns the errors as expected.
+// Errors should be of type awserr.Error, if the sqs.ReceiveMessageWithContext
+// function returns the errors as expected.
 type ErrorHandler func(ctx context.Context, err error) error
 
 // Poller is an instance of the polling framework, it contains
