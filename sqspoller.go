@@ -150,7 +150,7 @@ func (p *Poller) Run() error {
 	pollingErrors := p.poll(ctx, handler)
 
 	//======================================================================
-	// OnMessage Polling errors, shutdown signals, heartbeats
+	// Handle polling errors and shutdown signals
 	for {
 		select {
 		case err := <-pollingErrors:
