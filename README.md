@@ -127,3 +127,30 @@ func main() {
 	}
 }
 ```
+
+## Shutdown
+
+When shutting down the poller, there are three different modes of shutdown to choose from.
+
+#### ShutdownNow
+
+```go
+ poller.ShutdownNow()
+```
+The ShutdownNow method cancels the context object immediately and exits the Run() function. It does not wait for any jobs to finish handling before exiting.
+
+#### ShutdownGracefully
+
+```go
+ poller.ShutdownGracefully()
+```
+The ShutdownGracefully method waits for the handler to finish handling the current message before cancelling the context object and exiting the Run() function. If the handler is blocked then ShutdownGracefully will not exit.
+
+#### ShutdownAfter
+
+```go
+ poller.ShutdownAfter(30*time.Second)
+```
+The ShutdownAfter method attempts to shutdown gracefully within the given time, if the handler cannot complete it's current job within the given time, then the context object is cancelled at that time allowing the Run() function to exit. If the timeout happens before the poller can shutdown gracefully then ShutdownAfter returns error, ErrShutdownGraceful.
+
+
