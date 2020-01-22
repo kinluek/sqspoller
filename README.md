@@ -186,3 +186,7 @@ func main() {
 	}
 }
 ```
+
+## Testing 
+
+Tests in the sqspoller_test.go file require that docker is installed and running on your machine as the tests spin up local SQS containers to test against.
