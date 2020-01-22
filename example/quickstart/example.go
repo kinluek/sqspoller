@@ -44,10 +44,9 @@ func main() {
 	// supply handler to handle errors returned from poll requests to
 	// SQS returning a non nil error will cause the poller to exit.
 	poller.OnError(func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		// log error and exit poller.
+		log.Println(err)
+		return err
 	})
 
 	// Run poller.

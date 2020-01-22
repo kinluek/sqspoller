@@ -29,9 +29,10 @@ var (
 type MessageHandler func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error
 
 // ErrorHandler is a function which handlers errors returned
-// from sqs.ReceiveMessageWithContext. Returning nil from the
-// ErrorHandler will allow the poller to continue, returning
-// an error will cause the poller to exit.
+// from sqs.ReceiveMessageWithContext, it will only be invoked
+// if the error is not nil. Returning nil from the ErrorHandler
+// will allow the poller to continue, returning an error will
+// cause the poller to exit.
 //
 // Errors should be of type awserr.Error, if the sqs.ReceiveMessageWithContext
 // function returns the errors as expected.
