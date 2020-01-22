@@ -1,34 +1,27 @@
 package sqspoller
 
+import "sync/atomic"
+
 // resetRunState sets the running and shuttingDown status values
-// back to false.
+// back to 0.
 func (p *Poller) resetRunState() {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-	p.running = false
-	p.shuttingDown = false
+	atomic.SwapInt64(&p.running, 0)
+	atomic.SwapInt64(&p.shuttingDown, 0)
 }
 
 // isRunning checks the running state of the poller
 func (p *Poller) isRunning() bool {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-	return p.running
+	return atomic.LoadInt64(&p.running) == 1
 }
-
 
 // checkAndSetRunningStatus is called at the start of the Run
 // method to check whether the poller is already running. If it
 // is, the function returns the ErrAlreadyRunning error, else
-// it sets the running status value to true.
+// it sets the running status value to 1.
 func (p *Poller) checkAndSetRunningStatus() error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	if p.running {
+	if ok := atomic.CompareAndSwapInt64(&p.running, 0, 1); !ok {
 		return ErrAlreadyRunning
 	}
-	p.running = true
 	return nil
 }
 
@@ -36,14 +29,11 @@ func (p *Poller) checkAndSetRunningStatus() error {
 // shutdown method to check whether the poller is already in the
 // process of shutting down. If it is, the function returns the
 // ErrAlreadyShuttingDown error, else it sets the shuttingDown
-// value to true.
+// value to 1.
 func (p *Poller) checkAndSetShuttingDownStatus() error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	if p.shuttingDown {
+	if ok := atomic.CompareAndSwapInt64(&p.shuttingDown, 0, 1); !ok {
 		return ErrAlreadyShuttingDown
 	}
-	p.shuttingDown = true
 	return nil
+
 }
