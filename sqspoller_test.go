@@ -30,7 +30,7 @@ func TestPoller(t *testing.T) {
 
 	t.Run("LastPollTime updates", Test.LastPollTime)
 
-	t.Run("default poller - ctx has CtxTackingValue", Test.DefaultPollerContextValue)
+	t.Run("default poller - ctx has TackingValue", Test.DefaultPollerContextValue)
 
 	t.Run("race - shutdown", Test.RaceShutdown)
 }
@@ -62,12 +62,12 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Attach Handler and Start Polling.
+	// Attach MessageHandler and Start Polling.
 	// Assert that the correct message is received and that the correct
 	// error is returned.
 	confirmedRunning := errors.New("started and exited")
 
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		if len(msgOut.Messages) > 0 {
 			if *msgOut.Messages[0].Body != messageBody {
 				t.Fatalf("received message body: %v, wanted: %v", *msgOut.Messages[0].Body, messageBody)
@@ -83,7 +83,15 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 		return confirmedRunning
 	}
 
-	poller.Handle(handler)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
 
 	err = poller.Run()
 	if err != confirmedRunning {
@@ -100,13 +108,21 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up empty handler.
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	// Set up empty handlerOnMsg.
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil
 	}
 
-	poller.Handle(handler)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
 
 	pollingErrors := make(chan error, 1)
 
@@ -141,13 +157,13 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up Handler - start shutdown at the start of the
+	// Set up MessageHandler - start shutdown at the start of the
 	// handling and make sure shutdown hasn't finished by the
 	// time it returns.
 	var confirmed bool
 	shutdownFinished := make(chan error)
 
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 
 		// use channels to confirm shutdown waits for
 		// the requests to finish handling before shutting down.
@@ -164,14 +180,22 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 
 		select {
 		case <-shutdownFinished:
-			t.Fatalf("shutdown should not have finished before handler returned")
+			t.Fatalf("shutdown should not have finished before handlerOnMsg returned")
 		default:
 		}
 
 		return nil
 	}
 
-	poller.Handle(handler)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
 
 	pollingErrors := make(chan error, 1)
 
@@ -205,15 +229,23 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up empty handler.
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	// Set up empty handlerOnMsg.
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(200 * time.Millisecond)
 		return nil
 	}
 
-	poller.Handle(handler)
-	pollingErrors := make(chan error, 1)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
+
+	pollingErrors := make(chan error, 1)
 	// ==============================================================
 	// Start Polling in separate goroutine
 	go func() {
@@ -246,15 +278,23 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up empty handler.
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	// Set up empty handlerOnMsg.
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(500 * time.Millisecond)
 		return nil
 	}
 
-	poller.Handle(handler)
-	pollingErrors := make(chan error, 1)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
+
+	pollingErrors := make(chan error, 1)
 	// ==============================================================
 	// Start Polling in separate goroutine
 	go func() {
@@ -288,13 +328,21 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 	poller.SetHandlerTimeout(time.Millisecond)
 
 	// ==============================================================
-	// Set up Handler - make sure handler runs for longer than HandlerTimeout
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	// Set up MessageHandler - make sure handlerOnMsg runs for longer than HandlerTimeout
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil
 	}
 
-	poller.Handle(handler)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
 
 	if err := poller.Run(); err != sqspoller.ErrHandlerTimeout {
 		t.Fatalf("expected to get ErrHandlerTimeout, got %v", err)
@@ -310,11 +358,20 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up Handler
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	// Set up MessageHandler
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		return nil
 	}
-	poller.Handle(handler)
+
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnError(errorHandler)
+	poller.OnMessage(msgHandler)
 
 	// ==============================================================
 	// Start Polling in separate goroutine
@@ -354,11 +411,11 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up Handler - confirm that sqspoller.CtxTackingValue is contained
+	// Set up MessageHandler - confirm that sqspoller.TackingValue is contained
 	// within ctx object.
 
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
-		_, ok := ctx.Value(sqspoller.CtxKey).(*sqspoller.CtxTackingValue)
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
+		_, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
 		}
@@ -370,7 +427,16 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 		return nil
 	}
 
-	poller.Handle(handler)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
+
 	if err := poller.Run(); err != nil {
 		t.Fatalf("poller should not have returned error: %v", err)
 	}
@@ -389,14 +455,22 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 	c := sync.NewCond(&sync.Mutex{})
 
 	// ==============================================================
-	// Set up Handler
-	handler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput, err error) error {
+	// Set up MessageHandler
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		c.Broadcast()
 		time.Sleep(time.Second)
 		return nil
 	}
 
-	poller.Handle(handler)
+	errorHandler := func(ctx context.Context, err error) error {
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errorHandler)
 
 	go func() {
 		poller.Run()
