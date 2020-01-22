@@ -81,10 +81,7 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -112,10 +109,7 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -185,10 +179,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -233,10 +224,7 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -282,10 +270,7 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -332,10 +317,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -361,10 +343,7 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnError(errorHandler)
@@ -425,10 +404,7 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -460,10 +436,7 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)
@@ -522,10 +495,7 @@ func (p *PollerTests) OnErrorExit(t *testing.T) {
 	}
 
 	errorHandler := func(ctx context.Context, err error) error {
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 
 	poller.OnMessage(msgHandler)

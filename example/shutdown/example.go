@@ -28,10 +28,7 @@ func messageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.M
 }
 
 func errorHandler(ctx context.Context, err error) error {
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func main() {
