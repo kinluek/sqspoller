@@ -35,6 +35,7 @@ func Test_waitForError(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
 			cancel()
+			time.Sleep(50 * time.Millisecond)
 			errChan <- nil
 		}()
 		if err := waitForError(ctx, errChan); err != context.Canceled {
@@ -56,4 +57,21 @@ func Test_waitForError(t *testing.T) {
 		}
 	})
 
+}
+
+func Test_waitForInterval(t *testing.T) {
+
+	t.Run("standard wait", func(t *testing.T) {
+		if err := waitForInterval(context.Background(), time.Second); err != nil {
+			t.Fatalf("expected waitForInterval() to return nil, got %v", err)
+		}
+	})
+
+	t.Run("context cancelled before interval time", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := waitForInterval(ctx, time.Second); err != context.Canceled {
+			t.Fatalf("expected waitForInterval() to return context.Canceled, got %v", err)
+		}
+	})
 }
