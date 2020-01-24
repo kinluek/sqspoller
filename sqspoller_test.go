@@ -548,7 +548,6 @@ func (p *PollerTests) OnErrorContinue(t *testing.T) {
 	}
 }
 
-
 func (p *PollerTests) SetupErrors(t *testing.T) {
 	poller := sqspoller.New(p.sqsClient)
 

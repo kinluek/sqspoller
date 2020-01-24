@@ -127,7 +127,6 @@ func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
 	return finalErr
 }
 
-
 // checkForStopRequests is called at the end of a poll cycle
 // to check whether any stop requests have been made. If a stop
 // request is received, the function blocks the poller from making
@@ -141,4 +140,3 @@ func (p *Poller) checkForStopRequests() {
 	default:
 	}
 }
-

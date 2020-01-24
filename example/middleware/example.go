@@ -35,8 +35,8 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
-	// configure poll interval and handler timeout
-	poller.SetPollInterval(30 * time.Second)
+	// configure idle poll interval and handler timeout
+	poller.SetIdlePollInterval(30 * time.Second)
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages

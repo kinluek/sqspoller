@@ -61,7 +61,6 @@ type Poller struct {
 	// is received, the CurrentInterval will drop back down to 0.
 	CurrentInterval time.Duration
 
-
 	errorHandler    ErrorHandler   // Handler used to handle message request errors
 	messageHandler  MessageHandler // Handler used to handle successful message requests.
 	outerMiddleware []Middleware   // Outer middleware of messageHandler.
@@ -151,7 +150,6 @@ func (p *Poller) Run() error {
 
 	msgHandler = wrapMiddleware(msgHandler, p.innerMiddleware...)
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
-
 
 	// Start polling
 	pollingErrors := p.poll(ctx, msgHandler)
@@ -247,4 +245,3 @@ func (p *Poller) handle(ctx context.Context, msgHandler MessageHandler, out *sqs
 
 	return handlerErrors
 }
-

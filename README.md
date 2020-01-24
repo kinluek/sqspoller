@@ -19,16 +19,16 @@ import "github.com/kinluek/sqspoller"
 ## Features
 
 - Timeouts
-- Polling Intervals
-- Graceful Shutdowns
+- Polling intervals
+- Polling back offs on empty responses
+- Graceful shutdowns
 - Middleware
-- Simple Message Delete Methods
+- Remove message from queue with simple delete API
 
 
 ## Quick Start
 
 ```go
-// example.go
 package main
 
 import (
@@ -56,8 +56,8 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
-	// configure poll interval and handler timeout
-	poller.SetPollInterval(30 * time.Second)
+	// configure idle poll interval and handler timeout
+	poller.SetIdlePollInterval(30 * time.Second)
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages
@@ -91,7 +91,7 @@ func main() {
 
 ```go
 func main() {
-	
+
 	poller := sqspoller.New(sqsClient)
 
 	// IgnoreEmptyResponses stops empty message outputs from reaching the core handler
@@ -109,8 +109,8 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
-	// configure poll interval and handler timeout
-	poller.SetPollInterval(30 * time.Second)
+	// configure idle poll interval and handler timeout
+	poller.SetIdlePollInterval(30 * time.Second)
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages

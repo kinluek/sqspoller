@@ -50,7 +50,6 @@ func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string)
 	}
 }
 
-
 func messageOutputIsEmpty(out *sqs.ReceiveMessageOutput) bool {
 	if out.Messages == nil || len(out.Messages) == 0 {
 		return true
