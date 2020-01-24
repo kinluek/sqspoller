@@ -114,7 +114,6 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 // current job. The returned channel will return the final error
 // once the poller has been confirmed to have stopped polling.
 func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
-
 	finalErr := make(chan error)
 
 	go func() {
@@ -123,7 +122,6 @@ func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
 		<-p.stopConfirmed
 		finalErr <- err
 	}()
-
 	return finalErr
 }
 
