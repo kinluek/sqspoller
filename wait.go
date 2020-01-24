@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// waitForError waits for the error channel to return it's error,
-// if a cancellation signal is received before the error from the
-// channel is received, the function will exit with a non nil error.
+// waitForError waits for the error channel to return it's error, if a cancellation
+// signal is received before the error from the channel is received, the function
+// will exit with a non nil error.
 func waitForError(ctx context.Context, errChan <-chan error) error {
 	select {
 	case err := <-errChan:
@@ -43,8 +43,8 @@ func (p *Poller) handlePollInterval(ctx context.Context) error {
 	return waitForInterval(ctx, p.CurrentInterval)
 }
 
-// waitForInterval waits for the given interval time before moving on,
-// unless the context object is cancelled first.
+// waitForInterval waits for the given interval time before moving on, unless
+// the context object is cancelled first.
 func waitForInterval(ctx context.Context, interval time.Duration) error {
 	nextPoll := time.NewTimer(interval)
 	defer nextPoll.Stop()
@@ -57,9 +57,9 @@ func waitForInterval(ctx context.Context, interval time.Duration) error {
 	}
 }
 
-// doubleWithLimit takes a current time duration and doubles it, if
-// doubling it goes over the limit, then the limit is returned. If
-// the current duration is less than 1 second, then 1 second is returned.
+// doubleWithLimit takes a current time duration and doubles it, if doubling it
+// goes over the limit, then the limit is returned. If the current duration is
+// less than 1 second, then 1 second is returned.
 func doubleWithLimit(current, limit time.Duration) time.Duration {
 	if current > limit {
 		return limit

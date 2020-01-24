@@ -18,11 +18,11 @@ func (p *Poller) ReceiveMessageParams(input *sqs.ReceiveMessageInput, opts ...re
 // SetIdlePollInterval sets the polling interval for when the queue is empty
 // and poll requests are returning empty responses, leaving the handler idle.
 //
-// This interval will be reached through an exponential back off starting
-// at 1 second from when the first empty response is received after a non-
-// empty response, consecutive empty responses will cause the interval to
-// double each time until the set interval is reached. Once a successful
-// response is returned, the interval drops back down to 0.
+// This interval will be reached through an exponential back off starting at 1
+// second from when the first empty response is received after a non-empty
+// response, consecutive empty responses will cause the interval to double each
+// time until the set interval is reached. Once a successful response is returned,
+// the interval drops back down to 0.
 func (p *Poller) SetIdlePollInterval(t time.Duration) {
 	p.IdlePollInterval = t
 }

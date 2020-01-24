@@ -20,27 +20,23 @@ var (
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
-// MessageHandler is a function which handles the incoming
-// SQS message.
+// MessageHandler is a function which handles the incoming SQS message.
 //
-// The sqs Client used to instantiate the poller will also
-// be made available to allow the user to perform standard
-// sqs operations.
+// The sqs Client used to instantiate the poller will also be made available to
+// allow the user to perform standard sqs operations.
 type MessageHandler func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error
 
-// ErrorHandler is a function which handlers errors returned
-// from sqs.ReceiveMessageWithContext, it will only be invoked
-// if the error is not nil. Returning nil from the ErrorHandler
-// will allow the poller to continue, returning an error will
-// cause the poller to exit.
+// ErrorHandler is a function which handlers errors returned from
+// sqs.ReceiveMessageWithContext, it will only be invoked if the error is not
+// nil. Returning nil from the ErrorHandler will allow the poller to continue,
+// returning an error will cause the poller to exit.
 //
 // Errors should be of type awserr.Error, if the sqs.ReceiveMessageWithContext
 // function returns the errors as expected.
 type ErrorHandler func(ctx context.Context, err error) error
 
-// Poller is an instance of the polling framework, it contains
-// the SQS client and provides a simple API for polling an SQS
-// queue.
+// Poller is an instance of the polling framework, it contains the SQS client
+// and provides a simple API for polling an SQS queue.
 type Poller struct {
 	client   *sqs.SQS
 	queueURL string
@@ -56,9 +52,9 @@ type Poller struct {
 	// empty responses.
 	IdlePollInterval time.Duration
 
-	// Current poll interval, this interval will reach the IdlePollInterval upon
-	// enough consecutive empty poll requests. Once a successful message response
-	// is received, the CurrentInterval will drop back down to 0.
+	// Current poll interval, this interval will reach the IdlePollInterval
+	// upon enough consecutive empty poll requests. Once a successful message
+	// response is received, the CurrentInterval will drop back down to 0.
 	CurrentInterval time.Duration
 
 	errorHandler    ErrorHandler   // Handler used to handle message request errors
@@ -83,8 +79,7 @@ type Poller struct {
 	options         []request.Option         // request options.
 }
 
-// New creates a new instance of the SQS Poller from an instance
-// of sqs.SQS.
+// New creates a new instance of the SQS Poller from an instance of sqs.SQS.
 func New(sqsSvc *sqs.SQS) *Poller {
 	p := Poller{
 		client: sqsSvc,
@@ -111,15 +106,15 @@ func Default(sqsSvc *sqs.SQS) *Poller {
 
 // OnMessage attaches a MessageHandler to the Poller instance, if a MessageHandler
 // already exists on the Poller instance, it will be replaced. The Middleware
-// supplied to OnMessage will be applied first before any global middleware set by
-// Use().
+// supplied to OnMessage will be applied first before any global middleware set
+// by Use().
 func (p *Poller) OnMessage(handler MessageHandler, middleware ...Middleware) {
 	p.messageHandler = handler
 	p.innerMiddleware = middleware
 }
 
-// OnError attaches an ErrorHandler to the Poller instance. It is the first line of
-// defence against message request errors from SQS.
+// OnError attaches an ErrorHandler to the Poller instance. It is the first line
+// of defence against message request errors from SQS.
 func (p *Poller) OnError(handler ErrorHandler) {
 	p.errorHandler = handler
 }
@@ -211,9 +206,10 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 	return errorChan
 }
 
-// handle handles the results from the call to sqs.ReceiveMessageWithContext function,
-// by passing the results through the message and error handlers. The function returns
-// a channel for which the caller can listen on to receive the resulting error.
+// handle handles the results from the call to sqs.ReceiveMessageWithContext
+// function, by passing the results through the message and error handlers. The
+// function returns a channel for which the caller can listen on to receive the
+// resulting error.
 func (p *Poller) handle(ctx context.Context, msgHandler MessageHandler, out *sqs.ReceiveMessageOutput, sqsErr error) <-chan error {
 	handlerErrors := make(chan error)
 
