@@ -102,7 +102,7 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up empty handlerOnMsg.
+	// Set up empty messageHandler.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil
@@ -140,6 +140,14 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 }
 
 func (p *PollerTests) ShutdownGracefully(t *testing.T) {
+	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
+		QueueUrl:    p.queueURL,
+		MessageBody: aws.String("message"),
+	})
+	if err != nil {
+		t.Fatalf("failed to send message to SQS: %v", err)
+	}
+
 	// ==============================================================
 	// Create new poller using local queue.
 	poller := sqspoller.New(p.sqsClient)
@@ -171,7 +179,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 
 		select {
 		case <-shutdownFinished:
-			t.Fatalf("shutdown should not have finished before handlerOnMsg returned")
+			t.Fatalf("shutdown should not have finished before messageHandler returned")
 		default:
 		}
 
@@ -217,7 +225,7 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up empty handlerOnMsg.
+	// Set up empty messageHandler.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(200 * time.Millisecond)
 		return nil
@@ -263,7 +271,7 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 	})
 
 	// ==============================================================
-	// Set up empty handlerOnMsg.
+	// Set up empty messageHandler.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(500 * time.Millisecond)
 		return nil
@@ -310,7 +318,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 	poller.SetHandlerTimeout(time.Millisecond)
 
 	// ==============================================================
-	// Set up MessageHandler - make sure handlerOnMsg runs for longer than HandlerTimeout
+	// Set up MessageHandler - make sure messageHandler runs for longer than HandlerTimeout
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil

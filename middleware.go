@@ -21,15 +21,15 @@ func (p *Poller) Use(middleware ...Middleware) {
 	}
 }
 
-// wrapMiddleware creates a new handlerOnMsg by wrapping outerMiddleware around a final
-// handlerOnMsg. The middlewares' Handlers will be executed by requests in the order
+// wrapMiddleware creates a new messageHandler by wrapping outerMiddleware around a final
+// messageHandler. The middlewares' Handlers will be executed by requests in the order
 // they are provided.
 func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHandler {
 
-	// start wrapping the handlerOnMsg from the end of the
+	// start wrapping the messageHandler from the end of the
 	// outerMiddleware slice, to the start, this will ensure
 	// the code is executed in the right order when, the
-	// resulting handlerOnMsg is executed.
+	// resulting messageHandler is executed.
 	for i := len(middleware) - 1; i >= 0; i-- {
 		mw := middleware[i]
 		if mw != nil {
@@ -40,9 +40,9 @@ func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHan
 	return handler
 }
 
-// applyTimeout applies a timeout to the handlerOnMsg if the timeout is
+// applyTimeout applies a timeout to the messageHandler if the timeout is
 // greater than 0. If timeout is 0, then the function returns the
-// handlerOnMsg unchanged.
+// messageHandler unchanged.
 func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler {
 	if timeout > 0 {
 		handler = wrapMiddleware(handler, HandlerTimeout(timeout))
@@ -51,7 +51,7 @@ func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler 
 }
 
 // HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if
-// the handlerOnMsg cannot process the message within that time. The user can then
+// the messageHandler cannot process the message within that time. The user can then
 // use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
 // exit or move onto the next poll request.
 func HandlerTimeout(t time.Duration) Middleware {
@@ -135,7 +135,7 @@ func Tracking() Middleware {
 }
 
 // IgnoreEmptyResponses stops the data from being passed down
-// to the inner handlerOnMsg, if there is no message to be handled.
+// to the inner messageHandler, if there is no message to be handled.
 func IgnoreEmptyResponses() Middleware {
 
 	f := func(handler MessageHandler) MessageHandler {
