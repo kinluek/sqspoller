@@ -139,7 +139,7 @@ func (p *Poller) Run() error {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
+	defer cancel()
 	// Apply middleware upon starting
 	msgHandler := applyTimeout(p.messageHandler, p.HandlerTimeout)
 

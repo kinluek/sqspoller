@@ -58,6 +58,7 @@ func HandlerTimeout(t time.Duration) Middleware {
 
 		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput) error {
 			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 
 			timer := time.NewTimer(t)
 			defer timer.Stop()
