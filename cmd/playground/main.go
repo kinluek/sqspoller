@@ -29,18 +29,21 @@ var (
 
 func run() (err error) {
 
+	pgLog := log.New(os.Stdout, "[playground] ", 0)
+
 	//==============================================================
 	// Parse playground args
 	flag.Parse()
 	idlePollInterval := time.Duration(*it) * time.Second
 	shutdownTimeout := time.Duration(*st) * time.Second
 
-	fmt.Println("[args] --idle-poll-interval:", idlePollInterval)
-	fmt.Println("[args] --shutdown-timeout:", shutdownTimeout)
+	pgLog.Println("[args] --idle-poll-interval:", idlePollInterval)
+	pgLog.Println("[args] --shutdown-timeout:", shutdownTimeout)
 
 	//==============================================================
 	// Setting up localstack SQS
-	fmt.Println("setting up localstack...")
+	pgLog.Println("setting up localstack...")
+
 	env, teardown, err := setup.Localstack(region, queueName)
 	if err != nil {
 		return fmt.Errorf("could not setup localstack: %v", err)
@@ -49,11 +52,12 @@ func run() (err error) {
 
 	//==============================================================
 	// Listen for text input to send to SQS
-	go queueMessageInput(env.Client, env.Queue)
+	go queueMessageInput(pgLog, env.Client, env.Queue)
 
 	//==============================================================
 	// Starting Poller
-	fmt.Println("starting poller...")
+	pgLog.Println("starting poller...")
+
 	poller := sqspoller.Default(env.Client)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		MaxNumberOfMessages: aws.Int64(1),
@@ -77,7 +81,7 @@ func run() (err error) {
 	case err := <-pollerErrors:
 		return fmt.Errorf("encountered polling error: %v", err)
 	case <-shutdown:
-		fmt.Printf("shutdown signal received")
+		pgLog.Println("shutdown signal received")
 		if err := poller.ShutdownAfter(shutdownTimeout); err != nil {
 			return fmt.Errorf("shutting down: %v", err)
 		}
@@ -87,11 +91,11 @@ func run() (err error) {
 }
 
 // queueMessageInput listens to text on stdin and sends it to the SQS queue
-// the for the poller to receive.
-func queueMessageInput(client *sqs.SQS, queueURL *string) {
-	fmt.Println("enter text to standard in, then press enter to send the message:")
-
+// for the poller to receive.
+func queueMessageInput(log *log.Logger, client *sqs.SQS, queueURL *string) {
+	log.Println("enter text to standard in, then press enter to send the message:")
 	reader := bufio.NewReader(os.Stdin)
+
 	for {
 		msg, _ := reader.ReadString('\n')
 		msg = strings.TrimSpace(msg)
@@ -101,9 +105,9 @@ func queueMessageInput(client *sqs.SQS, queueURL *string) {
 			QueueUrl:    queueURL,
 		})
 		if err != nil {
-			fmt.Printf("could not send message: %v\n", err)
+			log.Printf("could not send message: %v\n", err)
 		} else {
-			fmt.Println("message sent")
+			log.Println("message sent")
 		}
 	}
 }
