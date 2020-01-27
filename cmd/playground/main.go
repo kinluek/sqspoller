@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
+	"github.com/kinluek/sqspoller/cmd/playground/internal/handlers"
 	"github.com/kinluek/sqspoller/cmd/playground/internal/setup"
 	"log"
 	"os"
@@ -59,8 +60,8 @@ func run() (err error) {
 		QueueUrl:            env.Queue,
 	})
 	poller.SetIdlePollInterval(idlePollInterval)
-	poller.OnMessage(messageHandler)
-	poller.OnError(errorHandler)
+	poller.OnMessage(handlers.MessageHandler)
+	poller.OnError(handlers.ErrorHandler)
 
 	pollerErrors := make(chan error, 1)
 	go func() {
