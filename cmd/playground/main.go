@@ -42,11 +42,11 @@ func run() (err error) {
 
 	//==============================================================
 	// Setting up localstack SQS
-	pgLog.Println("setting up localstack...")
+	pgLog.Println("[docker] setting up localstack...")
 
 	env, teardown, err := setup.Localstack(region, queueName)
 	if err != nil {
-		return fmt.Errorf("could not setup localstack: %v", err)
+		return fmt.Errorf("[docker] could not setup localstack: %v", err)
 	}
 	defer teardown()
 
@@ -56,7 +56,7 @@ func run() (err error) {
 
 	//==============================================================
 	// Starting Poller
-	pgLog.Println("starting poller...")
+	pgLog.Println("[poller] starting poller...")
 
 	poller := sqspoller.Default(env.Client)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
@@ -79,11 +79,11 @@ func run() (err error) {
 
 	select {
 	case err := <-pollerErrors:
-		return fmt.Errorf("encountered polling error: %v", err)
+		return fmt.Errorf("[poller] encountered polling error: %v", err)
 	case <-shutdown:
-		pgLog.Println("shutdown signal received")
+		pgLog.Println("[poller] shutdown signal received")
 		if err := poller.ShutdownAfter(shutdownTimeout); err != nil {
-			return fmt.Errorf("shutting down: %v", err)
+			return fmt.Errorf("[poller] shutting down: %v", err)
 		}
 	}
 
@@ -93,7 +93,7 @@ func run() (err error) {
 // queueMessageInput listens to text on stdin and sends it to the SQS queue
 // for the poller to receive.
 func queueMessageInput(log *log.Logger, client *sqs.SQS, queueURL *string) {
-	log.Println("enter text to standard in, then press enter to send the message:")
+	log.Println("[input] enter text to standard in, then press enter to send the message:")
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -105,9 +105,9 @@ func queueMessageInput(log *log.Logger, client *sqs.SQS, queueURL *string) {
 			QueueUrl:    queueURL,
 		})
 		if err != nil {
-			log.Printf("could not send message: %v\n", err)
+			log.Printf("[input] could not send message: %v\n", err)
 		} else {
-			log.Println("message sent")
+			log.Println("[input] message sent")
 		}
 	}
 }
