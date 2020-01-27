@@ -22,13 +22,21 @@ const (
 )
 
 var (
-	idleInterval = flag.Int("interval", 4, "sets the interval time in seconds between each poll when queue is empty")
-	shutdownTime = flag.Int("shutdown-time", 5, "sets the shutdown timeout")
-
+	it = flag.Int("idle-poll-interval", 4, "sets the interval time in seconds between each poll when queue is empty")
+	st = flag.Int("shutdown-timeout", 5, "sets the shutdown timeout in seconds")
 )
 
-func run() error {
+func run() (err error) {
+
+	//==============================================================
+	// Parse playground args
 	flag.Parse()
+	idlePollInterval := time.Duration(*it) * time.Second
+	shutdownTimeout := time.Duration(*st) * time.Second
+
+	fmt.Println("[args] --idle-poll-interval:", idlePollInterval)
+	fmt.Println("[args] --shutdown-timeout:", shutdownTimeout)
+
 	//==============================================================
 	// Setting up localstack SQS
 	fmt.Println("setting up localstack...")
@@ -50,7 +58,7 @@ func run() error {
 		MaxNumberOfMessages: aws.Int64(1),
 		QueueUrl:            env.Queue,
 	})
-	poller.SetIdlePollInterval(4 * time.Second)
+	poller.SetIdlePollInterval(idlePollInterval)
 	poller.OnMessage(messageHandler)
 	poller.OnError(errorHandler)
 
@@ -69,7 +77,7 @@ func run() error {
 		return fmt.Errorf("encountered polling error: %v", err)
 	case <-shutdown:
 		fmt.Printf("shutdown signal received")
-		if err := poller.ShutdownAfter(10 * time.Second); err != nil {
+		if err := poller.ShutdownAfter(shutdownTimeout); err != nil {
 			return fmt.Errorf("shutting down: %v", err)
 		}
 	}
@@ -92,7 +100,7 @@ func queueMessageInput(client *sqs.SQS, queueURL *string) {
 			QueueUrl:    queueURL,
 		})
 		if err != nil {
-			fmt.Printf("could not send message %v\n", err)
+			fmt.Printf("could not send message: %v\n", err)
 		} else {
 			fmt.Println("message sent")
 		}
