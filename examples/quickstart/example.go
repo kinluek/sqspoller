@@ -31,7 +31,16 @@ func main() {
 
 	// supply handler to handle new messages
 	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
+
+		// the framework adds tracking values to the ctx object for each handler.
+		v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+		fmt.Println("TRACE ID:", v.TraceID)
+		fmt.Println("RECEIVE TIME:", v.Now)
+
+		// messages will never be empty when using the default poller, unless the errors
+		// on the error handler are ignored.
 		msg := msgOutput.Messages[0]
+
 		// do work on message
 		fmt.Println("GOT MESSAGE: ", msg)
 		// delete message from queue
@@ -41,8 +50,8 @@ func main() {
 		return nil
 	})
 
-	// supply handler to handle errors returned from poll requests to
-	// SQS returning a non nil error will cause the poller to exit.
+	// supply handler to handle errors returned from poll requests to SQS.
+	// Returning a non nil error will cause the poller to exit.
 	poller.OnError(func(ctx context.Context, err error) error {
 		// log error and exit poller.
 		log.Println(err)

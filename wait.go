@@ -31,7 +31,6 @@ func (p *Poller) handlePollInterval(ctx context.Context) error {
 	if p.IdlePollInterval == 0 {
 		return nil
 	}
-
 	// dont wait if queue has messages and set
 	// currentInterval back down to 0
 	if !p.queueEmpty {
@@ -40,17 +39,19 @@ func (p *Poller) handlePollInterval(ctx context.Context) error {
 	}
 
 	p.CurrentInterval = doubleWithLimit(p.CurrentInterval, p.IdlePollInterval)
-	return waitForInterval(ctx, p.CurrentInterval)
+	return waitForInterval(ctx, p.CurrentInterval, p.exitWait)
 }
 
 // waitForInterval waits for the given interval time before moving on, unless
-// the context object is cancelled first.
-func waitForInterval(ctx context.Context, interval time.Duration) error {
+// the context object is cancelled or an exit signal is received first.
+func waitForInterval(ctx context.Context, interval time.Duration, exit <-chan struct{}) error {
 	nextPoll := time.NewTimer(interval)
 	defer nextPoll.Stop()
 
 	select {
 	case <-nextPoll.C:
+		return nil
+	case <-exit:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
