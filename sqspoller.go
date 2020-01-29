@@ -90,6 +90,7 @@ type Poller struct {
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
 	stopConfirmed  chan struct{}  // channel to send confirmation that polling has been blocked
+	exitWait       chan struct{}  // channel to send signal to exit waiting on poll interval.
 
 	receiveMsgInput *sqs.ReceiveMessageInput // parameters to make message request to SQS.
 	options         []request.Option         // request options.
@@ -104,6 +105,7 @@ func New(sqsSvc *sqs.SQS) *Poller {
 		shutdownErrors: make(chan error, 1),
 		stopRequest:    make(chan struct{}, 1),
 		stopConfirmed:  make(chan struct{}),
+		exitWait:       make(chan struct{}, 1),
 
 		outerMiddleware: make([]Middleware, 0),
 	}
@@ -143,21 +145,15 @@ func (p *Poller) Run() error {
 	}
 	defer p.resetRunState()
 
-	if p.messageHandler == nil {
-		return ErrNoMessageHandler
-	}
-	if p.errorHandler == nil {
-		return ErrNoErrorHandler
-	}
-	if p.receiveMsgInput == nil {
-		return ErrNoReceiveMessageParams
+	if err := p.validateSetup(); err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	// Apply middleware upon starting
 	msgHandler := applyTimeout(p.messageHandler, p.HandlerTimeout)
-
 	msgHandler = wrapMiddleware(msgHandler, p.innerMiddleware...)
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
 

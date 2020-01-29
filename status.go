@@ -34,3 +34,19 @@ func (p *Poller) checkAndSetShuttingDownStatus() error {
 	return nil
 
 }
+
+// validateSetup should be executed at the start of the Run() method to validate
+// that the poller has all the necessary configurations and handlers set up. if
+// a non-nil error is returned then the Run() method should exit.
+func (p *Poller) validateSetup() error {
+	if p.messageHandler == nil {
+		return ErrNoMessageHandler
+	}
+	if p.errorHandler == nil {
+		return ErrNoErrorHandler
+	}
+	if p.receiveMsgInput == nil {
+		return ErrNoReceiveMessageParams
+	}
+	return nil
+}

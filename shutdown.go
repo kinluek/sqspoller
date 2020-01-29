@@ -112,9 +112,11 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 // will return the final error once the poller has been confirmed to have stopped
 // polling.
 func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
+	p.stopRequest <- struct{}{}
+	p.exitWait <- struct{}{}
+
 	finalErr := make(chan error)
 	go func() {
-		p.stopRequest <- struct{}{}
 		err := <-pollingErrors
 		<-p.stopConfirmed
 		finalErr <- err
