@@ -35,7 +35,7 @@ func StartLocalStackContainer(envars map[string]string, tmpDirVolume string) (*C
 		}
 	}
 
-	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack", "--network-alias", "localstack"}
+	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack"}
 	args = append(args, envArgs...)
 	args = append(args, "localstack/localstack")
 
