@@ -51,17 +51,17 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string, tmpDirVolu
 func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
 	t.Helper()
 
-	idBuf, err := cmd.Output()
+	idBuf, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("could not start container: %v", err)
+		t.Fatalf("could not start container: %v", string(idBuf))
 	}
 	containerID := strings.TrimSpace(string(idBuf))
 
 	// get container info.
 	cmd = exec.Command("docker", "container", "inspect", containerID)
-	infoBuf, err := cmd.Output()
+	infoBuf, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("could not inspect container with id %v: %v", containerID, err)
+		t.Fatalf("could not inspect container with id %v: %v", containerID, string(infoBuf))
 	}
 
 	var containerInfo []struct {
