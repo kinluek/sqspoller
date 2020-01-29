@@ -53,7 +53,7 @@ func Test_wrapMiddleware(t *testing.T) {
 	}
 
 	if text != want {
-		t.Fatalf("final text produced by wrapped handlerOnMsg: %v wanted: %v", text, want)
+		t.Fatalf("final text produced by wrapped messageHandler: %v wanted: %v", text, want)
 	}
 
 }

@@ -5,17 +5,16 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-// MessageOutput is contains the SQS ReceiveMessageOutput and
-// is passed down to the MessageHandler when the Poller is running.
+// MessageOutput is contains the SQS ReceiveMessageOutput and is passed down to
+// the MessageHandler when the Poller is running.
 type MessageOutput struct {
 	*sqs.ReceiveMessageOutput
 	Messages []*Message
 	queueURL string
 }
 
-// Message is an individual message, contained within
-// a MessageOutput, it provides methods to remove
-// itself from the SQS queue.
+// Message is an individual message, contained within a MessageOutput, it provides
+// methods to remove itself from the SQS queue.
 type Message struct {
 	*sqs.Message
 
@@ -31,8 +30,7 @@ func (m *Message) Delete() (*sqs.DeleteMessageOutput, error) {
 	})
 }
 
-// convertMessage converts an sqs.ReceiveMessageOutput to
-// sqspoller.MessageOutput.
+// convertMessage converts an sqs.ReceiveMessageOutput to sqspoller.MessageOutput.
 func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string) *MessageOutput {
 	messages := make([]*Message, 0)
 	for _, msg := range msgOut.Messages {
@@ -48,4 +46,13 @@ func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string)
 		Messages:             messages,
 		queueURL:             qURL,
 	}
+}
+
+// messageOutputIsEmpty takes an sqs.ReceiveMessageOutput and returns true if the
+// output is empty.
+func messageOutputIsEmpty(out *sqs.ReceiveMessageOutput) bool {
+	if out.Messages == nil || len(out.Messages) == 0 {
+		return true
+	}
+	return false
 }

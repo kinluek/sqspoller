@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-// Middleware is a function which that wraps a MessageHandler
-// to add functionality before or after the MessageHandler code.
+// Middleware is a function which that wraps a MessageHandler to add functionality
+// before or after the MessageHandler code.
 type Middleware func(MessageHandler) MessageHandler
 
-// Use attaches global outerMiddleware to the Poller instance which will
-// wrap any MessageHandler and MessageHandler specific outerMiddleware.
+// Use attaches global outerMiddleware to the Poller instance which will wrap
+// any  MessageHandler and MessageHandler specific outerMiddleware.
 func (p *Poller) Use(middleware ...Middleware) {
 	if p.outerMiddleware == nil {
 		p.outerMiddleware = middleware
@@ -21,15 +21,14 @@ func (p *Poller) Use(middleware ...Middleware) {
 	}
 }
 
-// wrapMiddleware creates a new handlerOnMsg by wrapping outerMiddleware around a final
-// handlerOnMsg. The middlewares' Handlers will be executed by requests in the order
-// they are provided.
+// wrapMiddleware creates a new messageHandler by wrapping outerMiddleware around
+// a final messageHandler. The middlewares' Handlers will be executed by requests
+// in the order they are provided.
 func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHandler {
 
-	// start wrapping the handlerOnMsg from the end of the
-	// outerMiddleware slice, to the start, this will ensure
-	// the code is executed in the right order when, the
-	// resulting handlerOnMsg is executed.
+	// start wrapping the messageHandler from the end of the outerMiddleware
+	// slice, to the start, this will ensure the code is executed in the right
+	// order when, the resulting messageHandler is executed.
 	for i := len(middleware) - 1; i >= 0; i-- {
 		mw := middleware[i]
 		if mw != nil {
@@ -40,9 +39,8 @@ func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHan
 	return handler
 }
 
-// applyTimeout applies a timeout to the handlerOnMsg if the timeout is
-// greater than 0. If timeout is 0, then the function returns the
-// handlerOnMsg unchanged.
+// applyTimeout applies a timeout to the messageHandler if the timeout is greater
+// than 0. If timeout is 0, then the function returns the messageHandler unchanged.
 func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler {
 	if timeout > 0 {
 		handler = wrapMiddleware(handler, HandlerTimeout(timeout))
@@ -50,8 +48,8 @@ func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler 
 	return handler
 }
 
-// HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if
-// the handlerOnMsg cannot process the message within that time. The user can then
+// HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if the
+// messageHandler cannot process the message within that time. The user can then
 // use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
 // exit or move onto the next poll request.
 func HandlerTimeout(t time.Duration) Middleware {
@@ -60,6 +58,7 @@ func HandlerTimeout(t time.Duration) Middleware {
 
 		h := func(ctx context.Context, client *sqs.SQS, msgOut *MessageOutput) error {
 			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 
 			timer := time.NewTimer(t)
 			defer timer.Stop()
@@ -88,30 +87,27 @@ func HandlerTimeout(t time.Duration) Middleware {
 	return f
 }
 
-// ctxKey is the package's context key type used to store
-// values on context.Context object to avoid clashing with
-// other packages.
+// ctxKey is the package's context key type used to store values on context.Context
+// object to avoid clashing with other packages.
 type ctxKey int
 
-// TrackingKey should be used to access the values on the context
-// object of type *TackingValue placed by the Tacking middleware.
+// TrackingKey should be used to access the values on the context object of type
+// *TackingValue placed by the Tacking middleware.
 const TrackingKey ctxKey = 1
 
-// TackingValue represents the values stored on the
-// context object placed by the Tracking middeware.
+// TackingValue represents the values stored on the context object placed by the
+// Tracking middeware.
 //
-// The Poller returned by Default() comes with this
-// middleware installed.
+// The Poller returned by Default() comes with this middleware installed.
 type TackingValue struct {
 	TraceID string
 	Now     time.Time
 }
 
-// Tracking adds tracking information to the context object for each
-// message output received from the queue. The information can be
-// accessed on the context object by using the TrackingKey constant and
-// returns a *TackingValue object, containing a traceID and receive
-// time.
+// Tracking adds tracking information to the context object for each message output
+// received from the queue. The information can be accessed on the context object
+// by using the TrackingKey constant and returns a *TackingValue object, containing
+// a traceID and receive time.
 func Tracking() Middleware {
 
 	f := func(handler MessageHandler) MessageHandler {
@@ -134,8 +130,8 @@ func Tracking() Middleware {
 	return f
 }
 
-// IgnoreEmptyResponses stops the data from being passed down
-// to the inner handlerOnMsg, if there is no message to be handled.
+// IgnoreEmptyResponses stops the data from being passed down to the inner
+// messageHandler, if there is no message to be handled.
 func IgnoreEmptyResponses() Middleware {
 
 	f := func(handler MessageHandler) MessageHandler {
