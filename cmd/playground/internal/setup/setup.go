@@ -6,7 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/kinluek/sqspoller/cmd/playground/internal/docker"
+	"github.com/kinluek/sqspoller/cmd/playground/internal/setup/docker"
 	"os"
 	"sync"
 	"time"
