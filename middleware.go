@@ -3,7 +3,6 @@ package sqspoller
 import (
 	"context"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -79,49 +78,6 @@ func HandlerTimeout(t time.Duration) Middleware {
 			}
 
 			return nil
-		}
-
-		return h
-	}
-
-	return f
-}
-
-// ctxKey is the package's context key type used to store values on context.Context
-// object to avoid clashing with other packages.
-type ctxKey int
-
-// TrackingKey should be used to access the values on the context object of type
-// *TackingValue placed by the Tacking middleware.
-const TrackingKey ctxKey = 1
-
-// TackingValue represents the values stored on the context object placed by the
-// Tracking middeware.
-//
-// The Poller returned by Default() comes with this middleware installed.
-type TackingValue struct {
-	TraceID string
-	Now     time.Time
-}
-
-// Tracking adds tracking information to the context object for each message output
-// received from the queue. The information can be accessed on the context object
-// by using the TrackingKey constant and returns a *TackingValue object, containing
-// a traceID and receive time.
-func Tracking() Middleware {
-
-	f := func(handler MessageHandler) MessageHandler {
-
-		h := func(ctx context.Context, client *sqs.SQS, msgOutput *MessageOutput) error {
-
-			// add tracking info to context object
-			v := &TackingValue{
-				TraceID: uuid.New().String(),
-				Now:     time.Now(),
-			}
-			ctx = context.WithValue(ctx, TrackingKey, v)
-
-			return handler(ctx, client, msgOutput)
 		}
 
 		return h
