@@ -145,21 +145,15 @@ func (p *Poller) Run() error {
 	}
 	defer p.resetRunState()
 
-	if p.messageHandler == nil {
-		return ErrNoMessageHandler
-	}
-	if p.errorHandler == nil {
-		return ErrNoErrorHandler
-	}
-	if p.receiveMsgInput == nil {
-		return ErrNoReceiveMessageParams
+	if err := p.validateSetup(); err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	// Apply middleware upon starting
 	msgHandler := applyTimeout(p.messageHandler, p.HandlerTimeout)
-
 	msgHandler = wrapMiddleware(msgHandler, p.innerMiddleware...)
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
 
