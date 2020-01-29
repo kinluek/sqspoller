@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -34,6 +35,21 @@ type MessageHandler func(ctx context.Context, client *sqs.SQS, msgOutput *Messag
 // Errors should be of type awserr.Error, if the sqs.ReceiveMessageWithContext
 // function returns the errors as expected.
 type ErrorHandler func(ctx context.Context, err error) error
+
+// ctxKey is the package's context key type used to store values on context.Context
+// object to avoid clashing with other packages.
+type ctxKey int
+
+// TrackingKey should be used to access the values on the context object of type
+// *TackingValue.
+const TrackingKey ctxKey = 1
+
+// TackingValue represents the values stored on the context object, for each poll
+// the context object will store the time of message received and a trace ID.
+type TackingValue struct {
+	TraceID string
+	Now     time.Time
+}
 
 // Poller is an instance of the polling framework, it contains the SQS client
 // and provides a simple API for polling an SQS queue.
@@ -100,7 +116,6 @@ func New(sqsSvc *sqs.SQS) *Poller {
 func Default(sqsSvc *sqs.SQS) *Poller {
 	p := New(sqsSvc)
 	p.Use(IgnoreEmptyResponses())
-	p.Use(Tracking())
 	return p
 }
 
@@ -174,6 +189,10 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 	polling:
 		for {
 			p.LastPollTime = time.Now()
+
+			// add tracking info to context object
+			v := TackingValue{TraceID: uuid.New().String(), Now: time.Now()}
+			ctx = context.WithValue(ctx, TrackingKey, &v)
 
 			// Make request to SQS queue for message.
 			out, sqsErr := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)

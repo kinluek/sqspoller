@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -23,11 +21,9 @@ func main() {
 	// IgnoreEmptyResponses stops empty message outputs from reaching the core handler
 	// and therefore the user can guarantee that there will be at least one message in
 	// the message output.
+	//
+	// Note: Default poller comes with this middleware.
 	poller.Use(sqspoller.IgnoreEmptyResponses())
-
-	// Tracking adds tracking values to the context object which can be retrieved using
-	// sqspoller.TrackingKey.
-	poller.Use(sqspoller.Tracking())
 
 	// supply polling parameters.
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
@@ -41,15 +37,8 @@ func main() {
 
 	// supply handler to handle new messages
 	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
+		// can guarantee messages will have length greater than or equal to one.
 		msg := msgOutput.Messages[0]
-
-		// get tracking values provided by Tracking middleware.
-		v, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
-		if !ok {
-			return errors.New("tracking middleware should have provided traced ID and receive time")
-		}
-
-		fmt.Println(v.TraceID, v.Now)
 
 		// delete message from queue
 		if _, err := msg.Delete(); err != nil {

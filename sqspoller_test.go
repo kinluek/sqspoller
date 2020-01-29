@@ -26,7 +26,7 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 	t.Run("timeout - handling", Test.HandlerTimeout)
 	t.Run("LastPollTime updates", Test.LastPollTime)
-	t.Run("default poller - ctx has TackingValue", Test.DefaultPollerContextValue)
+	t.Run("context - has tracking value", Test.TrackingValueOnContext)
 	t.Run("race - shutdown", Test.RaceShutdown)
 	t.Run("error handler - exit", Test.OnErrorExit)
 	t.Run("error handler - continue", Test.OnErrorContinue)
@@ -376,7 +376,7 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 	poller.ShutdownNow()
 }
 
-func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
+func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 	// ==============================================================
 	// Put a message in queue
 	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
@@ -389,7 +389,7 @@ func (p *PollerTests) DefaultPollerContextValue(t *testing.T) {
 
 	// ==============================================================
 	// Create new poller using local queue.
-	poller := sqspoller.Default(p.sqsClient)
+	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
