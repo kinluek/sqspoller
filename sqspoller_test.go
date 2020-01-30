@@ -40,8 +40,8 @@ type PollerTests struct {
 }
 
 func (p *PollerTests) BasicPolling(t *testing.T) {
-	// ==============================================================
-	// Send message to SQS queue.
+
+	// Put a message in the queue, ready to be received by the poller.
 	messageBody := "message-body"
 	sendResp, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
 		QueueUrl:    p.queueURL,
@@ -51,14 +51,13 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 		t.Fatalf("failed to send message to SQS: %v", err)
 	}
 
-	// ==============================================================
 	// Create new poller using local queue.
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
+
 	// Attach MessageHandler and Start Polling.
 	// Assert that the correct message is received and that the correct
 	// error is returned.
@@ -94,15 +93,11 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 }
 
 func (p *PollerTests) ShutdownNow(t *testing.T) {
-	// ==============================================================
-	// Create new poller using local queue.
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
-	// Set up empty messageHandler.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil
@@ -117,7 +112,6 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 
 	pollingErrors := make(chan error, 1)
 
-	// ==============================================================
 	// Start Polling in separate goroutine
 	go func() {
 		pollingErrors <- nil
@@ -148,14 +142,12 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		t.Fatalf("failed to send message to SQS: %v", err)
 	}
 
-	// ==============================================================
-	// Create new poller using local queue.
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
+
 	// Set up MessageHandler - start shutdown at the start of the
 	// handling and make sure shutdown hasn't finished by the
 	// time it returns.
@@ -217,16 +209,16 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 }
 
 func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
-	// ==============================================================
-	// Create new poller using local queue.
+
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
-	// Set up empty messageHandler.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
+
+		// Make sure handler runs quick enough to gracefully shutdown
+		// before shutdown timeout.
 		time.Sleep(200 * time.Millisecond)
 		return nil
 	}
@@ -239,7 +231,7 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 	poller.OnError(errorHandler)
 
 	pollingErrors := make(chan error, 1)
-	// ==============================================================
+
 	// Start Polling in separate goroutine
 	go func() {
 		pollingErrors <- nil
@@ -263,16 +255,15 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 }
 
 func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
-	// ==============================================================
-	// Create new poller using local queue.
+
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
-	// Set up empty messageHandler.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
+
+		// Make sure handler takes longer than the shutdown after timeout.
 		time.Sleep(500 * time.Millisecond)
 		return nil
 	}
@@ -285,8 +276,8 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 	poller.OnError(errorHandler)
 
 	pollingErrors := make(chan error, 1)
-	// ==============================================================
-	// Start Polling in separate goroutine
+
+	// Start poller in separate goroutine
 	go func() {
 		pollingErrors <- nil
 		pollingErrors <- poller.Run()
@@ -308,8 +299,7 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 }
 
 func (p *PollerTests) HandlerTimeout(t *testing.T) {
-	// ==============================================================
-	// Create new poller using local queue.
+
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
@@ -317,7 +307,6 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 
 	poller.SetHandlerTimeout(time.Millisecond)
 
-	// ==============================================================
 	// Set up MessageHandler - make sure messageHandler runs for longer than HandlerTimeout
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
@@ -337,15 +326,12 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 }
 
 func (p *PollerTests) LastPollTime(t *testing.T) {
-	// ==============================================================
-	// Create new poller using local queue.
+
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
-	// Set up MessageHandler
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		return nil
 	}
@@ -357,7 +343,6 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 	poller.OnError(errorHandler)
 	poller.OnMessage(msgHandler)
 
-	// ==============================================================
 	// Start Polling in separate goroutine
 	pollingErrors := make(chan error)
 	go func() {
@@ -377,8 +362,8 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 }
 
 func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
-	// ==============================================================
-	// Put a message in queue
+
+	// Put a message in the queue.
 	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
 		QueueUrl:    p.queueURL,
 		MessageBody: aws.String("messageBody"),
@@ -386,18 +371,13 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to send message to SQS: %v", err)
 	}
-
-	// ==============================================================
-	// Create new poller using local queue.
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
 
-	// ==============================================================
 	// Set up MessageHandler - confirm that sqspoller.TackingValue is contained
 	// within ctx object.
-
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		_, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
 		if !ok {
@@ -426,8 +406,7 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 
 func (p *PollerTests) RaceShutdown(t *testing.T) {
 	t.Skip("RaceShutdown: cannot guarantee race condition will be met")
-	// ==============================================================
-	// Create new poller using local queue.
+
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
@@ -435,9 +414,10 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 
 	c := sync.NewCond(&sync.Mutex{})
 
-	// ==============================================================
-	// Set up MessageHandler
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
+
+		// When handler is invoked, send signal to both shutdown goroutines to
+		// shutdown at the same time.
 		c.Broadcast()
 		time.Sleep(time.Second)
 		return nil
@@ -459,6 +439,7 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 	var shutdownCalls sync.WaitGroup
 	shutdownCalls.Add(2)
 
+	// ait for broadcast to shutdown
 	go func() {
 		defer shutdownCalls.Done()
 		c.L.Lock()
@@ -492,7 +473,6 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 func (p *PollerTests) OnErrorExit(t *testing.T) {
 	poller := sqspoller.New(p.sqsClient)
 
-	// ==============================================================
 	// Supply invalid queue URL
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String("invalid-queue-url"),
@@ -518,7 +498,6 @@ func (p *PollerTests) OnErrorExit(t *testing.T) {
 func (p *PollerTests) OnErrorContinue(t *testing.T) {
 	poller := sqspoller.New(p.sqsClient)
 
-	// ==============================================================
 	// Supply invalid queue URL
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String("invalid-queue-url"),
