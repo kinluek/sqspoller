@@ -35,7 +35,7 @@ func StartLocalStackContainer(envars map[string]string, tmpDirVolume string) (*C
 		}
 	}
 
-	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack", "--network-alias", "localstack"}
+	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack"}
 	args = append(args, envArgs...)
 	args = append(args, "localstack/localstack")
 
@@ -46,17 +46,17 @@ func StartLocalStackContainer(envars map[string]string, tmpDirVolume string) (*C
 // execStartContainerCommand takes the start container command and executes it
 // to return a *Container.
 func execStartContainerCommand(cmd *exec.Cmd) (*Container, error) {
-	idBuf, err := cmd.Output()
+	idBuf, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("could not start container: %v", err)
+		return nil, fmt.Errorf("could not start container: %v", string(idBuf))
 	}
 	containerID := strings.TrimSpace(string(idBuf))
 
 	// get container info.
 	cmd = exec.Command("docker", "container", "inspect", containerID)
-	infoBuf, err := cmd.Output()
+	infoBuf, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("could not inspect container with id %v: %v", containerID, err)
+		return nil, fmt.Errorf("could not inspect container with id %v: %v", containerID, string(infoBuf))
 	}
 
 	var containerInfo []struct {

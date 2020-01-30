@@ -78,10 +78,10 @@ type Poller struct {
 	outerMiddleware []Middleware   // Outer middleware of messageHandler.
 	innerMiddleware []Middleware   // Inner middleware of messageHandler,
 
-	// Active is true if the last poll returned a non empty message output.
-	// While active, the PollInterval is ignored and the poller polls the
-	// queue continuously without a pause until an empty response is returned
-	// and active is set back to false.
+	// queueEmpty is true if the last poll returned an non empty message output.
+	// While the queue is empty, the CurrentInterval will increase exponentially
+	// with each consecutive poll request until it reachs the IdlePollInterval
+	// duration.
 	queueEmpty bool
 
 	running        int64          // 1 if Poller is in running state, 0 if not.

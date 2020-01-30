@@ -177,4 +177,28 @@ func main() {
 
 ## Testing 
 
-Tests in the sqspoller_test.go file require that docker is installed and running on your machine as the tests spin up local SQS containers to test against.
+Tests in the sqspoller_test.go file require that docker is installed and running on your machine, 
+as the tests spin up local SQS containers to test the framework against against.
+
+#### Docker / Localstack Setup
+
+The localstack/localstack image is used to create a local SQS service for testing. The container start code is set up to
+bind mount the user's $TMPDIR directory to the container. For this to work, make sure the $TMPDIR path is added to docker's
+list of mountable directories. To do this:
+
+1. Go to Docker > Preferences > File Sharing
+2. Add the path to TMPDIR to the list, then click "Apply and Restart"
+
+```shell script
+$ echo $TMPDIR
+/var/folders/2s/tn0t3h3x4gn76z0w1plydw380000gp/T/
+```
+When running the tests for the first time with ``` go test```, 
+if the localstack/localstack image is not already downloaded on the machine, the test functions will
+download the image first, which will cause the tests to run longer than expected. To avoid this,
+pull the image before hand with:
+
+```shell script
+docker pull localstack/localstack
+```
+
