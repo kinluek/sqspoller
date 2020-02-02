@@ -188,7 +188,7 @@ func main() {
 
 ## The Playground
 
-To see how you can experiment and play around with a local poller instance, take a look [here](./cmd/playground/README.md).
+To see how you can experiment and play around with a local poller instance, take a look [here](./cmd/playground).
 
 ## Dependencies
 
