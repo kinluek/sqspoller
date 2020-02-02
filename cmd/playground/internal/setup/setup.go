@@ -1,12 +1,16 @@
 package setup
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller/internal/testing/docker"
+	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,10 +21,10 @@ type SQS struct {
 	Queue  *string
 }
 
-// Localstack will set up the localstack container, running an SQS instance and
-// return when it is ready to be interacted with. A teardown function is also
-// returned which should be executed once the called is done with the SQS instance.
-func Localstack(region, queueName string) (env *SQS, teardown func() error, err error) {
+// NewEnv will set up the a new environment for the playground, a local SQS instance
+// will be returned when it is ready to be interacted with. A teardown function is also
+// returned, which should be executed once the caller is done with the SQS instance.
+func NewEnv(region, queueName string) (env *SQS, teardown func() error, err error) {
 
 	// ==============================================================
 	// Setup localstack with SQS
@@ -83,4 +87,27 @@ func Localstack(region, queueName string) (env *SQS, teardown func() error, err 
 	}
 
 	return &e, teardown, nil
+}
+
+
+// QueueMessageInput listens to text on stdin and sends it to the SQS queue
+// for the poller to receive.
+func QueueMessageInput(log *log.Logger, client *sqs.SQS, queueURL *string) {
+	log.Println("[input] enter text to standard in, then press enter to send the message:")
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		msg, _ := reader.ReadString('\n')
+		msg = strings.TrimSpace(msg)
+
+		_, err := client.SendMessage(&sqs.SendMessageInput{
+			MessageBody: aws.String(msg),
+			QueueUrl:    queueURL,
+		})
+		if err != nil {
+			log.Printf("[input] could not send message: %v\n", err)
+		} else {
+			log.Println("[input] message sent")
+		}
+	}
 }

@@ -1,18 +1,23 @@
+// Playground is where you can run the poller locally against a containerized SQS service.
+//
+// Run 'go run main.go' to see the poller in action, experiment with the poller by altering the
+// code or changing the configuration variables.
+//
+// Run 'go run main.go --help' to see what configurations variables are available.
 package main
 
 import (
-	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
-	"github.com/kinluek/sqspoller/cmd/playground/internal/handlers"
 	"github.com/kinluek/sqspoller/cmd/playground/internal/setup"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -26,6 +31,38 @@ var (
 	it = flag.Int("idle-poll-interval", 4, "sets the interval time in seconds between each poll when queue is empty")
 	st = flag.Int("shutdown-timeout", 5, "sets the shutdown timeout in seconds")
 )
+
+// MessageHandler set up for poller configured to received one message at a time.
+func MessageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
+	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+	fmt.Println("Trace ID: ", v.TraceID)
+	fmt.Println("Receive Time: ", v.Now)
+
+	// do work on message
+	msg := msgOutput.Messages[0]
+	fmt.Println("GOT MESSAGE: ", msg)
+
+	// delete message from queue
+	if _, err := msg.Delete(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ErrorHandler set up to log AWS error details.
+func ErrorHandler(ctx context.Context, err error) error {
+
+	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+	fmt.Println("Trace ID: ", v.TraceID)
+	fmt.Println("Receive Time: ", v.Now)
+
+	if awsErr, ok := err.(awserr.Error); ok {
+		fmt.Println("CODE:", awsErr.Code())
+		fmt.Println("ORIGINAL ERROR:", awsErr.OrigErr())
+		fmt.Println("MESSAGE:", awsErr.Error())
+	}
+	return err
+}
 
 func run() (err error) {
 
@@ -44,7 +81,7 @@ func run() (err error) {
 	// Setting up localstack SQS
 	log.Println("[docker] setting up localstack...")
 
-	env, teardown, err := setup.Localstack(region, queueName)
+	env, teardown, err := setup.NewEnv(region, queueName)
 	if err != nil {
 		return fmt.Errorf("[docker] could not testsetup localstack: %v", err)
 	}
@@ -52,7 +89,7 @@ func run() (err error) {
 
 	//==============================================================
 	// Listen for text input to send to SQS
-	go queueMessageInput(log, env.Client, env.Queue)
+	go setup.QueueMessageInput(log, env.Client, env.Queue)
 
 	//==============================================================
 	// Starting Poller
@@ -64,8 +101,8 @@ func run() (err error) {
 		QueueUrl:            env.Queue,
 	})
 	poller.SetIdlePollInterval(idlePollInterval)
-	poller.OnMessage(handlers.MessageHandler)
-	poller.OnError(handlers.ErrorHandler)
+	poller.OnMessage(MessageHandler)
+	poller.OnError(ErrorHandler)
 
 	pollerErrors := make(chan error, 1)
 	go func() {
@@ -89,28 +126,6 @@ func run() (err error) {
 	}
 
 	return nil
-}
-
-// queueMessageInput listens to text on stdin and sends it to the SQS queue
-// for the poller to receive.
-func queueMessageInput(log *log.Logger, client *sqs.SQS, queueURL *string) {
-	log.Println("[input] enter text to standard in, then press enter to send the message:")
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		msg, _ := reader.ReadString('\n')
-		msg = strings.TrimSpace(msg)
-
-		_, err := client.SendMessage(&sqs.SendMessageInput{
-			MessageBody: aws.String(msg),
-			QueueUrl:    queueURL,
-		})
-		if err != nil {
-			log.Printf("[input] could not send message: %v\n", err)
-		} else {
-			log.Println("[input] message sent")
-		}
-	}
 }
 
 func main() {
