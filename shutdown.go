@@ -15,8 +15,7 @@ const (
 	after
 )
 
-// shutdown holds information needed to perform
-// the required shutdown.
+// shutdown holds information needed to perform the required shutdown.
 type shutdown struct {
 	sig     shutdownMode
 	timeout <-chan time.Time
@@ -38,10 +37,9 @@ func (p *Poller) ShutdownGracefully() error {
 	return <-p.shutdownErrors
 }
 
-// ShutdownAfter will attempt to shutdown gracefully,
-// if graceful shutdown cannot be achieved within the given
-// time frame, the Poller will exit, potentially leaking
-// unhandled resources.
+// ShutdownAfter will attempt to shutdown gracefully, if graceful shutdown cannot
+// be achieved within the given time frame, the Poller will exit, potentially
+// leaking unhandled resources.
 func (p *Poller) ShutdownAfter(t time.Duration) error {
 	if !p.isRunning() {
 		return nil
@@ -57,8 +55,8 @@ func (p *Poller) ShutdownAfter(t time.Duration) error {
 	return <-p.shutdownErrors
 }
 
-// ShutdownNow shuts down the Poller instantly,
-// potentially leaking unhandled resources.
+// ShutdownNow shuts down the Poller instantly, potentially leaking unhandled
+// resources.
 func (p *Poller) ShutdownNow() error {
 	if !p.isRunning() {
 		return nil
@@ -74,8 +72,8 @@ func (p *Poller) ShutdownNow() error {
 	return <-p.shutdownErrors
 }
 
-// handleShutdown handles the shutdown logic for the three
-// different shutdown modes.
+// handleShutdown handles the shutdown logic for the three different shutdown
+// modes.
 func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel context.CancelFunc) error {
 	switch sd.sig {
 	case now:
@@ -109,30 +107,27 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 	}
 }
 
-// finishCurrentJob sends a stop request to the poller to tell it
-// to stop making more polls after it has finished handling its
-// current job. The returned channel will return the final error
-// once the poller has been confirmed to have stopped polling.
+// finishCurrentJob sends a stop request to the poller to tell it to stop making
+// more polls after it has finished handling its current job. The returned channel
+// will return the final error once the poller has been confirmed to have stopped
+// polling.
 func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
+	p.stopRequest <- struct{}{}
+	p.exitWait <- struct{}{}
 
 	finalErr := make(chan error)
-
 	go func() {
-		p.stopRequest <- struct{}{}
 		err := <-pollingErrors
 		<-p.stopConfirmed
 		finalErr <- err
 	}()
-
 	return finalErr
 }
 
-
-// checkForStopRequests is called at the end of a poll cycle
-// to check whether any stop requests have been made. If a stop
-// request is received, the function blocks the poller from making
-// anymore requests. This should happen before a graceful shutdown
-// to ensure that no more requests to the queue are made.
+// checkForStopRequests is called at the end of a poll cycle to check whether any
+// stop requests have been made. If a stop request is received, the function blocks
+// the poller from making anymore requests. This should happen before a graceful
+// shutdown to ensure that no more requests to the queue are made.
 func (p *Poller) checkForStopRequests() {
 	select {
 	case <-p.stopRequest:
@@ -141,4 +136,3 @@ func (p *Poller) checkForStopRequests() {
 	default:
 	}
 }
-

@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
-	"log"
 	"time"
 )
 
@@ -17,8 +15,15 @@ func main() {
 	sess := session.Must(session.NewSession())
 	sqsClient := sqs.New(sess)
 
-	// use client to create default Poller instance.
-	poller := sqspoller.Default(sqsClient)
+	// use client to create Poller instance.
+	poller := sqspoller.New(sqsClient)
+
+	// IgnoreEmptyResponses stops empty message outputs from reaching the core handler
+	// and therefore the user can guarantee that there will be at least one message in
+	// the message output.
+	//
+	// Note: Default poller comes with this middleware.
+	poller.Use(sqspoller.IgnoreEmptyResponses())
 
 	// supply polling parameters.
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
@@ -26,21 +31,14 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
-	// configure poll interval and handler timeout
-	poller.SetPollInterval(30 * time.Second)
+	// configure idle poll interval and handler timeout
+	poller.SetIdlePollInterval(30 * time.Second)
 	poller.SetHandlerTimeout(120 * time.Second)
 
 	// supply handler to handle new messages
-	poller.Handle(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput, err error) error {
-
-		// check errors returned from polling the queue.
-		if err != nil {
-			return err
-		}
+	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
+		// can guarantee messages will have length greater than or equal to one.
 		msg := msgOutput.Messages[0]
-
-		// do work on message
-		fmt.Println("GOT MESSAGE: ", msg)
 
 		// delete message from queue
 		if _, err := msg.Delete(); err != nil {
@@ -48,9 +46,4 @@ func main() {
 		}
 		return nil
 	})
-
-	// Run poller.
-	if err := poller.Run(); err != nil {
-		log.Fatal(err)
-	}
 }

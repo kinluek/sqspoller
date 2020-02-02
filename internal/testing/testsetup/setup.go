@@ -1,4 +1,4 @@
-package setup
+package testsetup
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,21 +11,26 @@ import (
 	"time"
 )
 
-// SQS will setup the SQS container and return when it is ready
-// to be interacted with. A teardown function is also returned and it's
-// execution should be deferred.
-func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
+// SQS will testsetup the SQS container and return when it is ready to be interacted
+// with. It should be passed a value to specify how many times the function should
+// attempt to create the SQS queue before failing, these attempts are retried every
+// second from when the container starts.
+// A teardown function is also returned which should be invoked once the caller is
+// done with the SQS instance.
+func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
+	t.Helper()
 	testEnv := os.Getenv("ENVIRONMENT")
 
-	// ==============================================================
-	// Setup local containerized SQS
-
-	container := docker.StartLocalStackContainer(t, map[string]string{
+	// Create containerized SQS
+	container, err := docker.StartLocalStackContainer(map[string]string{
 		"SERVICES":    "sqs",
 		"DEBUG":       "1",
 		"DATA_DIR":    "/tmp/localstack/data",
 		"DOCKER_HOST": "unix:///var/run/docker.sock",
-	}, os.Getenv("TMPDIR"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	endPoint := "http://localhost:" + container.ExposedPorts["4576"][0].HostPort
 
@@ -35,16 +40,16 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 		// then localstack will run as a sibling container, therefore,
 		// we need to connect it to the same docker network as the
 		// application container to interact with it.
-		docker.NetworkConnect(t, os.Getenv("DOCKER_NETWORK"), container.ID)
+		if err := docker.NetworkConnect(os.Getenv("DOCKER_NETWORK"), container.ID); err != nil {
+			t.Fatal(err)
+		}
 
 		// first 12 characters of the container ID will be used
 		// as an alias when adding to the network.
 		endPoint = "http://" + container.ID[:12] + ":" + "4576"
 	}
 
-	// ==============================================================
-	// Setup SQS client using AWS SDK
-
+	// Create SQS client using AWS SDK
 	sess := session.Must(session.NewSession(&aws.Config{
 		Credentials: credentials.AnonymousCredentials,
 		Endpoint:    aws.String(endPoint),
@@ -52,15 +57,13 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	))
 	svc := sqs.New(sess)
 
-	// ==============================================================
 	// Create SQS queue in local container
 	// Keep retrying as local AWS environment will take time to be ready.
-
 	queueName := "test-queue"
 	var qURL *string
 
-	limitSecs := 30
-	for i := 0; i < limitSecs; i++ {
+
+	for i := 0; i < createQueueAttempts; i++ {
 		result, err := svc.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(queueName),
 		})
@@ -71,9 +74,15 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 		time.Sleep(time.Second)
 	}
 	if qURL == nil {
-		t.Fatalf("failed to create queue in under %v seconds", limitSecs)
+		t.Fatalf("failed to create queue in under %v seconds", createQueueAttempts)
 	}
 
-	return svc, qURL, container.Cleanup
+	teardown = func() {
+		if err := docker.StopContainer(container, 30*time.Second); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return svc, qURL, teardown
 }
 

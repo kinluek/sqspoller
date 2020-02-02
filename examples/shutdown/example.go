@@ -14,11 +14,7 @@ import (
 	"time"
 )
 
-func Handler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput, err error) error {
-	// check errors returned from polling the queue.
-	if err != nil {
-		return err
-	}
+func messageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 	msg := msgOutput.Messages[0]
 
 	// do work on message
@@ -29,6 +25,10 @@ func Handler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageO
 		return err
 	}
 	return nil
+}
+
+func errorHandler(ctx context.Context, err error) error {
+	return err
 }
 
 func main() {
@@ -42,7 +42,8 @@ func main() {
 		QueueUrl:            aws.String("https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"),
 	})
 
-	poller.Handle(Handler)
+	poller.OnMessage(messageHandler)
+	poller.OnError(errorHandler)
 
 	// run poller in a separate goroutine and wait for errors on channel
 	pollerErrors := make(chan error, 1)
@@ -58,6 +59,7 @@ func main() {
 	case err := <-pollerErrors:
 		log.Fatal(err)
 	case <-shutdown:
+		// attempt to shutdown gracefully within 30 seconds.
 		if err := poller.ShutdownAfter(30 * time.Second); err != nil {
 			log.Fatal(err)
 		}
