@@ -182,7 +182,7 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 
 	go func() {
 		defer close(errorChan)
-	polling:
+
 		for {
 			p.LastPollTime = time.Now()
 
@@ -210,11 +210,7 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 			}
 
 			errorChan <- nil
-
 			p.checkForStopRequests()
-
-			continue polling
-
 		}
 	}()
 

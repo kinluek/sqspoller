@@ -11,10 +11,13 @@ import (
 	"time"
 )
 
-// SQS will setup the SQS container and return when it is ready
-// to be interacted with. A teardown function is also returned and it's
-// execution should be deferred.
-func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
+// SQS will setup the SQS container and return when it is ready to be interacted
+// with. It should be passed a value to specify how many times the function should
+// attempt to create the SQS queue before failing, these attempts are retried every
+// second from when the container starts.
+// A teardown function is also returned which should be invoked once the caller is
+// done with the SQS instance.
+func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	testEnv := os.Getenv("ENVIRONMENT")
 
 	// Create containerized SQS
@@ -53,8 +56,8 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	queueName := "test-queue"
 	var qURL *string
 
-	limitSecs := 30
-	for i := 0; i < limitSecs; i++ {
+
+	for i := 0; i < createQueueAttempts; i++ {
 		result, err := svc.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(queueName),
 		})
@@ -65,7 +68,7 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 		time.Sleep(time.Second)
 	}
 	if qURL == nil {
-		t.Fatalf("failed to create queue in under %v seconds", limitSecs)
+		t.Fatalf("failed to create queue in under %v seconds", createQueueAttempts)
 	}
 
 	teardown = func() {
