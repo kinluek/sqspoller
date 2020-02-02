@@ -33,5 +33,5 @@ func (p *Poller) SetIdlePollInterval(t time.Duration) {
 // handled by custom middleware, so the  user can choose to move onto the next
 // poll request if they so wish.
 func (p *Poller) SetHandlerTimeout(t time.Duration) {
-	p.HandlerTimeout = t
+	p.handlerTimeout = t
 }

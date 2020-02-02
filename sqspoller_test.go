@@ -307,7 +307,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 
 	poller.SetHandlerTimeout(time.Millisecond)
 
-	// Set up MessageHandler - make sure messageHandler runs for longer than HandlerTimeout
+	// Set up MessageHandler - make sure messageHandler runs for longer than handlerTimeout
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil
