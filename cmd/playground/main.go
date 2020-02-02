@@ -29,7 +29,7 @@ var (
 
 func run() (err error) {
 
-	pgLog := log.New(os.Stdout, "[playground] ", 0)
+	log := log.New(os.Stdout, "[playground] ", 0)
 
 	//==============================================================
 	// Parse playground args
@@ -37,12 +37,12 @@ func run() (err error) {
 	idlePollInterval := time.Duration(*it) * time.Second
 	shutdownTimeout := time.Duration(*st) * time.Second
 
-	pgLog.Println("[args] --idle-poll-interval:", idlePollInterval)
-	pgLog.Println("[args] --shutdown-timeout:", shutdownTimeout)
+	log.Println("[args] --idle-poll-interval:", idlePollInterval)
+	log.Println("[args] --shutdown-timeout:", shutdownTimeout)
 
 	//==============================================================
 	// Setting up localstack SQS
-	pgLog.Println("[docker] setting up localstack...")
+	log.Println("[docker] setting up localstack...")
 
 	env, teardown, err := setup.Localstack(region, queueName)
 	if err != nil {
@@ -52,11 +52,11 @@ func run() (err error) {
 
 	//==============================================================
 	// Listen for text input to send to SQS
-	go queueMessageInput(pgLog, env.Client, env.Queue)
+	go queueMessageInput(log, env.Client, env.Queue)
 
 	//==============================================================
 	// Starting Poller
-	pgLog.Println("[poller] starting poller...")
+	log.Println("[poller] starting poller...")
 
 	poller := sqspoller.Default(env.Client)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
@@ -81,10 +81,11 @@ func run() (err error) {
 	case err := <-pollerErrors:
 		return fmt.Errorf("[poller] encountered polling error: %v", err)
 	case <-shutdown:
-		pgLog.Println("[poller] shutdown signal received")
+		log.Println("[poller] shutdown signal received")
 		if err := poller.ShutdownAfter(shutdownTimeout); err != nil {
 			return fmt.Errorf("[poller] shutting down: %v", err)
 		}
+		log.Printf("[poller] shutdown finished")
 	}
 
 	return nil
