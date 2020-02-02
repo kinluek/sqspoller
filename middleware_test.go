@@ -129,7 +129,7 @@ func TestHandlerTimeout(t *testing.T) {
 				return nil
 			}
 
-			handler := HandlerTimeout(tt.timeout)(inner)
+			handler := handlerTimeout(tt.timeout)(inner)
 			err := handler(context.Background(), &sqs.SQS{}, &MessageOutput{})
 
 			if err != tt.wantErr {

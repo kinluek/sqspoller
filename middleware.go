@@ -42,16 +42,19 @@ func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHan
 // than 0. If timeout is 0, then the function returns the messageHandler unchanged.
 func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler {
 	if timeout > 0 {
-		handler = wrapMiddleware(handler, HandlerTimeout(timeout))
+		handler = wrapMiddleware(handler, handlerTimeout(timeout))
 	}
 	return handler
 }
 
-// HandlerTimeout takes a timeout duration and returns ErrHandlerTimeout if the
+// handlerTimeout takes a timeout duration and returns ErrHandlerTimeout if the
 // messageHandler cannot process the message within that time. The user can then
 // use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
 // exit or move onto the next poll request.
-func HandlerTimeout(t time.Duration) Middleware {
+//
+// handlerTimeout middleware can only be applied via the Poller.SetHandlerTimeout
+// method.
+func handlerTimeout(t time.Duration) Middleware {
 
 	f := func(handler MessageHandler) MessageHandler {
 
