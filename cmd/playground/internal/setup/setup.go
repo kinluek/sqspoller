@@ -6,7 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/kinluek/sqspoller/cmd/playground/internal/setup/docker"
+	"github.com/kinluek/sqspoller/internal/testing/docker"
 	"sync"
 	"time"
 )
@@ -78,7 +78,7 @@ func Localstack(region, queueName string) (env *SQS, teardown func() error, err 
 	}
 
 	teardown = func() error {
-		fmt.Printf("cleaning up container resources...")
+		fmt.Println("cleaning up container resources...")
 		return docker.StopContainer(container, 30*time.Second)
 	}
 

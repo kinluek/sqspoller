@@ -46,7 +46,7 @@ func run() (err error) {
 
 	env, teardown, err := setup.Localstack(region, queueName)
 	if err != nil {
-		return fmt.Errorf("[docker] could not setup localstack: %v", err)
+		return fmt.Errorf("[docker] could not testsetup localstack: %v", err)
 	}
 	defer teardown()
 

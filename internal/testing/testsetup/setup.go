@@ -1,32 +1,36 @@
-package setup
+package testsetup
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/kinluek/sqspoller/internal/testing/setup/docker"
+	"github.com/kinluek/sqspoller/internal/testing/docker"
 	"os"
 	"testing"
 	"time"
 )
 
-// SQS will setup the SQS container and return when it is ready to be interacted
+// SQS will testsetup the SQS container and return when it is ready to be interacted
 // with. It should be passed a value to specify how many times the function should
 // attempt to create the SQS queue before failing, these attempts are retried every
 // second from when the container starts.
 // A teardown function is also returned which should be invoked once the caller is
 // done with the SQS instance.
 func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
+	t.Helper()
 	testEnv := os.Getenv("ENVIRONMENT")
 
 	// Create containerized SQS
-	container := docker.StartLocalStackContainer(t, map[string]string{
+	container, err := docker.StartLocalStackContainer(map[string]string{
 		"SERVICES":    "sqs",
 		"DEBUG":       "1",
 		"DATA_DIR":    "/tmp/localstack/data",
 		"DOCKER_HOST": "unix:///var/run/docker.sock",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	endPoint := "http://localhost:" + container.ExposedPorts["4576"][0].HostPort
 
@@ -36,7 +40,9 @@ func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *stri
 		// then localstack will run as a sibling container, therefore,
 		// we need to connect it to the same docker network as the
 		// application container to interact with it.
-		docker.NetworkConnect(t, os.Getenv("DOCKER_NETWORK"), container.ID)
+		if err := docker.NetworkConnect(os.Getenv("DOCKER_NETWORK"), container.ID); err != nil {
+			t.Fatal(err)
+		}
 
 		// first 12 characters of the container ID will be used
 		// as an alias when adding to the network.
@@ -72,7 +78,9 @@ func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *stri
 	}
 
 	teardown = func() {
-		docker.StopContainer(t, container, 30*time.Second)
+		if err := docker.StopContainer(container, 30*time.Second); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	return svc, qURL, teardown
