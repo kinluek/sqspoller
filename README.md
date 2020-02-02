@@ -4,6 +4,17 @@
 # SQS-Poller
 SQS-Poller is a simple queue polling framework, designed specifically to work with AWS SQS.
 
+## Contents
+
+- [Installation](#installation)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Using Middleware](#using-middleware)
+- [Handling Shutdowns](#shutdown)
+- [The Playground](#the-playground)
+- [Dependencies](#dependencies)
+- [Testing](#testing)
+
 ## Installation 
 
 1. Install sqspoller:
@@ -174,6 +185,10 @@ func main() {
 	}
 }
 ```
+
+## The Playground
+
+To see how you can experiment and play around with a local poller instance, take a look [here](./cmd/playground/README.md).
 
 ## Dependencies
 

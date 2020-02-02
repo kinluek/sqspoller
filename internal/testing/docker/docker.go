@@ -84,21 +84,17 @@ func StopContainer(container *Container, timeout time.Duration) error {
 
 	ctx := context.Background()
 
-	// container alias for logging
-	alias := container.ID[:12]
-
-	rmfConfig := types.ContainerRemoveOptions{
-		RemoveVolumes: true,
-		RemoveLinks:   true,
-		Force:         true,
-	}
-
 	// ContainerStop call should stop and remove the container, as containers can
 	// only be created with the StartContainer function which sets the AutoRemove
 	// config to true.
 	if err := cli.ContainerStop(ctx, container.ID, &timeout); err != nil {
+		rmfConfig := types.ContainerRemoveOptions{
+			RemoveVolumes: true,
+			RemoveLinks:   true,
+			Force:         true,
+		}
 		if err := cli.ContainerRemove(ctx, container.ID, rmfConfig); err != nil {
-			return fmt.Errorf("could not forcefully remove container %v", alias)
+			return fmt.Errorf("could not remove container %v", container.ID[:12])
 		}
 	}
 	return nil
@@ -135,9 +131,7 @@ func imageCheckAndPull(ctx context.Context, cli *client.Client, image string) er
 	if len(images) == 0 {
 		fmt.Printf("could not find %v locally\n", image)
 		fmt.Printf("pulling image %v from docker.io...\n", image)
-		r, err := cli.ImagePull(ctx, "docker.io/"+image, types.ImagePullOptions{
-
-		})
+		r, err := cli.ImagePull(ctx, "docker.io/"+image, types.ImagePullOptions{})
 		if err != nil {
 			return fmt.Errorf("could not pull %v image %v", image, err)
 		}

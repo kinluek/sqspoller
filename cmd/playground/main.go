@@ -1,9 +1,14 @@
-// Playground is where you can run the poller locally against a containerized SQS service.
+// The Playground is where you can run the poller locally against a containerized
+// SQS service.
 //
-// Run 'go run main.go' to see the poller in action, experiment with the poller by altering the
-// code or changing the configuration variables.
+// Run 'go run main.go' to see the poller in action. Experiment with the poller by
+// sending messages from the command line, altering the code or changing the configuration
+// variables.
 //
 // Run 'go run main.go --help' to see what configurations variables are available.
+//
+// Before running the playground poller, make sure docker is installed and running
+// on your machine.
 package main
 
 import (
@@ -34,6 +39,8 @@ var (
 
 // MessageHandler set up for poller configured to received one message at a time.
 func MessageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
+
+	// access tracking values from context
 	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
 	fmt.Println("Trace ID: ", v.TraceID)
 	fmt.Println("Receive Time: ", v.Now)
@@ -52,6 +59,7 @@ func MessageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.M
 // ErrorHandler set up to log AWS error details.
 func ErrorHandler(ctx context.Context, err error) error {
 
+	// access tracking values from context
 	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
 	fmt.Println("Trace ID: ", v.TraceID)
 	fmt.Println("Receive Time: ", v.Now)
@@ -83,7 +91,7 @@ func run() (err error) {
 
 	env, teardown, err := setup.NewEnv(region, queueName)
 	if err != nil {
-		return fmt.Errorf("[docker] could not testsetup localstack: %v", err)
+		return fmt.Errorf("[docker] could not set up environment: %v", err)
 	}
 	defer teardown()
 
