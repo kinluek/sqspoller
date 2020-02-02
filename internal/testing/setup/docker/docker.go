@@ -20,11 +20,12 @@ const localstackImage = "localstack/localstack:0.10.7"
 type Container struct {
 	ID           string
 	ExposedPorts map[string][]nat.PortBinding
-	running      bool
+	running      bool  // flag to indicate whether the container has already been stopped.
 }
 
 // newClient creates a new docker client.
 func newClient(t *testing.T) *client.Client {
+	t.Helper()
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		t.Fatalf("could not create docker client: %v", err)
@@ -36,11 +37,10 @@ func newClient(t *testing.T) *client.Client {
 // Provide configuration using envars.
 func StartLocalStackContainer(t *testing.T, envars map[string]string) *Container {
 	t.Helper()
-	ctx := context.Background()
-
-	// Create new docker client
 	cli := newClient(t)
 	defer cli.Close()
+
+	ctx := context.Background()
 
 	// Make sure we have the image to start the container from.
 	imageCheckAndPull(t, ctx, cli, localstackImage)
@@ -81,11 +81,10 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string) *Container
 
 // StopContainer stops and removes a running container.
 func StopContainer(t *testing.T, container *Container, timeout time.Duration) {
+	t.Helper()
 	if !container.running {
 		return
 	}
-
-	// Create new docker client
 	cli := newClient(t)
 	defer cli.Close()
 
@@ -117,8 +116,6 @@ func StopContainer(t *testing.T, container *Container, timeout time.Duration) {
 // NetworkConnect connects a container to the given network.
 func NetworkConnect(t *testing.T, network string, containerID string) {
 	t.Helper()
-
-	// Create new docker client
 	cli := newClient(t)
 	defer cli.Close()
 
@@ -132,6 +129,8 @@ func NetworkConnect(t *testing.T, network string, containerID string) {
 // imageCheckAndPull checks to see if the image exists on the machine, if it doesn't
 // the image is pulled from docker.io.
 func imageCheckAndPull(t *testing.T, ctx context.Context, cli *client.Client, image string) {
+	t.Helper()
+
 	filters := filters.NewArgs()
 	filters.Add("reference", image)
 	images, err := cli.ImageList(ctx, types.ImageListOptions{

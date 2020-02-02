@@ -175,6 +175,15 @@ func main() {
 }
 ```
 
+## Dependencies
+
+Just in case you was worried about dependency bloat, the core package functions only rely on two third party modules, which are:
+
+ * github.com/aws/aws-sdk-go v1.28.9 - What the framework is built for.
+ * github.com/google/uuid v1.1.1     - To generate reliable UUIDs for tracing.
+ 
+The rest of the dependencies that can be found in go.mod, are test dependencies. These modules provide functionality to effectively test the framework.
+
 ## Testing 
 
 Tests in the sqspoller_test.go file require that docker is installed and running on your machine, 
