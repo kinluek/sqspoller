@@ -6,8 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/kinluek/sqspoller/cmd/playground/internal/setup/docker"
-	"os"
+	"github.com/kinluek/sqspoller/internal/testing/docker"
 	"sync"
 	"time"
 )
@@ -18,9 +17,9 @@ type SQS struct {
 	Queue  *string
 }
 
-// Localstack will setup the localstack container and return when
-// it is ready to be interacted with. A teardown function is also returned
-// and it's execution should be deferred.
+// Localstack will set up the localstack container, running an SQS instance and
+// return when it is ready to be interacted with. A teardown function is also
+// returned which should be executed once the called is done with the SQS instance.
 func Localstack(region, queueName string) (env *SQS, teardown func() error, err error) {
 
 	// ==============================================================
@@ -30,7 +29,7 @@ func Localstack(region, queueName string) (env *SQS, teardown func() error, err 
 		"DEBUG":       "1",
 		"DATA_DIR":    "/tmp/localstack/data",
 		"DOCKER_HOST": "unix:///var/run/docker.sock",
-	}, os.Getenv("TMPDIR"))
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,5 +77,10 @@ func Localstack(region, queueName string) (env *SQS, teardown func() error, err 
 		Queue:  qURL,
 	}
 
-	return &e, container.Cleanup, nil
+	teardown = func() error {
+		fmt.Println("cleaning up container resources...")
+		return docker.StopContainer(container, 30*time.Second)
+	}
+
+	return &e, teardown, nil
 }

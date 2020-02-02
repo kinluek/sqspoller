@@ -7,14 +7,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
-	"github.com/kinluek/sqspoller/internal/testing/setup"
+	"github.com/kinluek/sqspoller/internal/testing/testsetup"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestPoller(t *testing.T) {
-	svc, queueURL, teardown := setup.SQS(t)
+	svc, queueURL, teardown := testsetup.SQS(t, 30)
 	defer teardown()
 
 	Test := PollerTests{svc, queueURL}
@@ -30,7 +30,7 @@ func TestPoller(t *testing.T) {
 	t.Run("race - shutdown", Test.RaceShutdown)
 	t.Run("error handler - exit", Test.OnErrorExit)
 	t.Run("error handler - continue", Test.OnErrorContinue)
-	t.Run("setup errors", Test.SetupErrors)
+	t.Run("testsetup errors", Test.SetupErrors)
 }
 
 // PollerTests holds the tests for the Poller
@@ -554,4 +554,5 @@ func (p *PollerTests) SetupErrors(t *testing.T) {
 	if err := poller.Run(); err != sqspoller.ErrNoReceiveMessageParams {
 		t.Fatalf("unexpected error returned, wanted: ErrNoReceiveMessageParams, got %v", err)
 	}
+
 }
