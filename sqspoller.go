@@ -57,10 +57,6 @@ type Poller struct {
 	client   *sqs.SQS
 	queueURL string
 
-	// Time to wait for messageHandler to process message, if messageHandler
-	// function takes longer than this to return, then the program is exited.
-	HandlerTimeout time.Duration
-
 	// Holds the time of the last poll request that was made. This can be checked
 	// periodically, to confirm the Poller is running as expected.
 	LastPollTime time.Time
@@ -72,6 +68,10 @@ type Poller struct {
 	// upon enough consecutive empty poll requests. Once a successful message
 	// response is received, the CurrentInterval will drop back down to 0.
 	CurrentInterval time.Duration
+
+	// Time to wait for messageHandler to process message, if messageHandler
+	// function takes longer than this to return, then the program is exited.
+	handlerTimeout time.Duration
 
 	errorHandler    ErrorHandler   // Handler used to handle message request errors
 	messageHandler  MessageHandler // Handler used to handle successful message requests.
@@ -153,7 +153,7 @@ func (p *Poller) Run() error {
 	defer cancel()
 
 	// Apply middleware upon starting
-	msgHandler := applyTimeout(p.messageHandler, p.HandlerTimeout)
+	msgHandler := applyTimeout(p.messageHandler, p.handlerTimeout)
 	msgHandler = wrapMiddleware(msgHandler, p.innerMiddleware...)
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
 

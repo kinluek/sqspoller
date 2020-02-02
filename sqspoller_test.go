@@ -57,7 +57,6 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 		QueueUrl: p.queueURL,
 	})
 
-
 	// Attach MessageHandler and Start Polling.
 	// Assert that the correct message is received and that the correct
 	// error is returned.
@@ -146,7 +145,6 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
 		QueueUrl: p.queueURL,
 	})
-
 
 	// Set up MessageHandler - start shutdown at the start of the
 	// handling and make sure shutdown hasn't finished by the
@@ -307,7 +305,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 
 	poller.SetHandlerTimeout(time.Millisecond)
 
-	// Set up MessageHandler - make sure messageHandler runs for longer than HandlerTimeout
+	// Set up MessageHandler - make sure messageHandler runs for longer than handlerTimeout
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
 		time.Sleep(time.Second)
 		return nil
@@ -384,9 +382,7 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 			t.Fatalf("ctx should container CtxValues object")
 		}
 		go func() {
-			if err := poller.ShutdownGracefully(); err != nil {
-				t.Fatalf("could not shut down gracefully: %v", err)
-			}
+			poller.ShutdownNow()
 		}()
 		return nil
 	}
@@ -397,10 +393,7 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 
 	poller.OnMessage(msgHandler)
 	poller.OnError(errorHandler)
-
-	if err := poller.Run(); err != nil {
-		t.Fatalf("poller should not have returned error: %v", err)
-	}
+	poller.Run()
 
 }
 
@@ -544,9 +537,10 @@ func (p *PollerTests) SetupErrors(t *testing.T) {
 		t.Fatalf("unexpected error returned, wanted: ErrNoErrorHandler, got %v", err)
 	}
 
+	confirmedRun := errors.New("confirmed")
 	// attach error handler
 	errorHandler := func(ctx context.Context, err error) error {
-		return nil
+		return confirmedRun
 	}
 	poller.OnError(errorHandler)
 
@@ -555,4 +549,14 @@ func (p *PollerTests) SetupErrors(t *testing.T) {
 		t.Fatalf("unexpected error returned, wanted: ErrNoReceiveMessageParams, got %v", err)
 	}
 
+	// add params the will cause the error handler to be invoked
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: aws.Int64(1),
+		QueueUrl:            aws.String("invalid-queue-url"),
+	})
+
+	// poller should now run and hit the error handler
+	if err := poller.Run(); err != confirmedRun {
+		t.Fatalf("unexpected error returned %v", err)
+	}
 }
