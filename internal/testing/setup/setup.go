@@ -17,15 +17,13 @@ import (
 func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	testEnv := os.Getenv("ENVIRONMENT")
 
-	// ==============================================================
-	// Setup local containerized SQS
-
+	// Create containerized SQS
 	container := docker.StartLocalStackContainer(t, map[string]string{
 		"SERVICES":    "sqs",
 		"DEBUG":       "1",
 		"DATA_DIR":    "/tmp/localstack/data",
 		"DOCKER_HOST": "unix:///var/run/docker.sock",
-	}, os.Getenv("TMPDIR"))
+	})
 
 	endPoint := "http://localhost:" + container.ExposedPorts["4576"][0].HostPort
 
@@ -42,9 +40,7 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 		endPoint = "http://" + container.ID[:12] + ":" + "4576"
 	}
 
-	// ==============================================================
-	// Setup SQS client using AWS SDK
-
+	// Create SQS client using AWS SDK
 	sess := session.Must(session.NewSession(&aws.Config{
 		Credentials: credentials.AnonymousCredentials,
 		Endpoint:    aws.String(endPoint),
@@ -52,10 +48,8 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	))
 	svc := sqs.New(sess)
 
-	// ==============================================================
 	// Create SQS queue in local container
 	// Keep retrying as local AWS environment will take time to be ready.
-
 	queueName := "test-queue"
 	var qURL *string
 
@@ -74,6 +68,10 @@ func SQS(t *testing.T) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 		t.Fatalf("failed to create queue in under %v seconds", limitSecs)
 	}
 
-	return svc, qURL, container.Cleanup
+	teardown = func() {
+		docker.StopContainer(t, container, 30*time.Second)
+	}
+
+	return svc, qURL, teardown
 }
 

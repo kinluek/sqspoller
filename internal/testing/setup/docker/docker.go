@@ -1,106 +1,111 @@
 package docker
 
 import (
-	"encoding/json"
-	"os/exec"
+	"context"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 )
 
-// Container represents a docker container
-// and holds the information for communicating
-// with the running docker container.
+// Container represents a docker container and holds the information required
+// for communicating with the it.
 type Container struct {
-	t            *testing.T
 	ID           string
-	ExposedPorts map[string][]Port // the map keys are the exposed container ports
-	Volumes      []string
+	ExposedPorts map[string][]nat.PortBinding
+	running      bool
 }
 
-type Port struct {
-	HostIP   string `json:"HostIp"`
-	HostPort string `json:"HostPort"`
-}
 
-// StartLocalStackContainer spins up a localstack container to
-// mock aws services, provide configuration with envars and give
-// a temp directory for to bind the container /tmp/localstack directory
-// to.
-func StartLocalStackContainer(t *testing.T, envars map[string]string, tmpDirVolume string) *Container {
-	t.Helper()
-
-	envArgs := make([]string, 0)
-	if envars != nil {
-		for key, value := range envars {
-			envArgs = append(envArgs, "-e", key+"="+value)
-		}
-	}
-
-	args := []string{"container", "run", "-P", "-d", "-v", tmpDirVolume + ":/tmp/localstack"}
-	args = append(args, envArgs...)
-	args = append(args, "localstack/localstack")
-
-	cmd := exec.Command("docker", args...)
-	return execStartContainerCommand(t, cmd)
-}
-
-// execStartContainerCommand takes the start container command and executes it
-// to return a *Container.
-func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
-	t.Helper()
-
-	idBuf, err := cmd.Output()
+// newClient creates a new docker client.
+func newClient(t *testing.T) *client.Client {
+	cli, err := client.NewEnvClient()
 	if err != nil {
-		t.Fatalf("could not start container: %v: %v", string(idBuf), err)
+		t.Fatalf("could not create docker client: %v", err)
 	}
-	containerID := strings.TrimSpace(string(idBuf))
+	return cli
+}
 
-	// get container info.
-	cmd = exec.Command("docker", "container", "inspect", containerID)
-	infoBuf, err := cmd.CombinedOutput()
+// StartLocalStackContainer runs a localstack container to mock AWS services.
+// Provide configuration using envars.
+func StartLocalStackContainer(t *testing.T, envars map[string]string) *Container {
+	t.Helper()
+	ctx := context.Background()
+
+	// Create new docker client
+	cli := newClient(t)
+	defer cli.Close()
+
+	// Create container
+	containerConfig := container.Config{
+		Env:   listify(envars),
+		Image: "localstack/localstack",
+	}
+	hostConfig := container.HostConfig{
+		AutoRemove:      true,
+		PublishAllPorts: true,
+	}
+	container, err := cli.ContainerCreate(ctx, &containerConfig, &hostConfig, nil, "")
 	if err != nil {
-		t.Fatalf("could not inspect container with id %v: %v", containerID, err)
+		t.Fatalf("could not create container: %v", err)
 	}
 
-	var containerInfo []struct {
-		ID      string    `json:"Id"`
-		Created time.Time `json:"Created"`
-		Mounts  []struct {
-			Type string `json:"Type"`
-			Name string `json:"Name"`
-		} `json:"Mounts"`
-		NetworkSettings struct {
-			Ports map[string][]Port `json:"Ports"`
-		} `json:"NetworkSettings"`
+	// Start container
+	err = cli.ContainerStart(ctx, container.ID, types.ContainerStartOptions{})
+	if err != nil {
+		t.Fatalf("could not start container %s: %v", container.ID[:12], err)
 	}
 
-	if err := json.Unmarshal(infoBuf, &containerInfo); err != nil {
-		t.Fatalf("could not unmarshal container info for container %v: %v", containerID, err)
+	// Inspect container to find host configuration
+	info, err := cli.ContainerInspect(ctx, container.ID)
+	if err != nil {
+		t.Fatalf("could not inspect container %s: %v", container.ID[:12], err)
 	}
-
-	// get volume associated with the container.
-	volumes := make([]string, 0)
-	for _, mount := range containerInfo[0].Mounts {
-		if mount.Type == "volume" {
-			volumes = append(volumes, mount.Name)
-		}
-	}
-
-	exposedPorts := make(map[string][]Port)
-	portReg := regexp.MustCompile(`^\d+`)
-
-	for key, value := range containerInfo[0].NetworkSettings.Ports {
-		containerPort := portReg.Find([]byte(key))
-		exposedPorts[string(containerPort)] = value
-	}
+	exposedPorts := mapPorts(info.NetworkSettings.Ports)
 
 	return &Container{
-		t:            t,
-		ID:           containerID,
+		ID:           container.ID,
 		ExposedPorts: exposedPorts,
-		Volumes:      volumes,
+		running:      true,
+	}
+}
+
+
+// StopContainer stops and removes a running container.
+func StopContainer(t *testing.T, container *Container, timeout time.Duration) {
+	if !container.running {
+		return
+	}
+
+	// Create new docker client
+	cli := newClient(t)
+	defer cli.Close()
+
+	ctx := context.Background()
+
+	// container alias for logging
+	alias := container.ID[:12]
+
+	rmfConfig := types.ContainerRemoveOptions{
+		RemoveVolumes: true,
+		RemoveLinks:   true,
+		Force:         true,
+	}
+
+	// ContainerStop call should stop and remove the container, as containers can
+	// only be created with the StartContainer function which sets the AutoRemove
+	// config to true.
+	if err := cli.ContainerStop(ctx, container.ID, &timeout); err != nil {
+		t.Logf("could not stop container: %v: %v", alias, err)
+		t.Logf("attempting to force remove container..")
+		if err := cli.ContainerRemove(ctx, container.ID, rmfConfig); err != nil {
+			t.Fatalf("could not forcefully remove container %v", alias)
+		}
+		t.Logf("container %v was forced removed", alias)
+		return
 	}
 }
 
@@ -108,47 +113,37 @@ func execStartContainerCommand(t *testing.T, cmd *exec.Cmd) *Container {
 func NetworkConnect(t *testing.T, network string, containerID string) {
 	t.Helper()
 
-	cmd := exec.Command("docker", "network", "connect", network, containerID)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to connect containers: %v, : %v", string(out), err)
+	// Create new docker client
+	cli := newClient(t)
+	defer cli.Close()
+
+	ctx := context.Background()
+
+	if err := cli.NetworkConnect(ctx, network, containerID, nil); err != nil {
+		t.Fatalf("could not connect container %v, to netowork %v",  containerID[:12], network)
 	}
 }
 
-// Logs outputs the logs produced by the container.
-func (c *Container) Logs() string {
-	c.t.Helper()
 
-	cmd := exec.Command("docker", "logs", c.ID)
-	logs, err := cmd.CombinedOutput()
-	if err != nil {
-		c.t.Fatalf("could not get logs from container %v: %v", c.ID, err)
+func mapPorts(m nat.PortMap) map[string][]nat.PortBinding {
+	exposedPorts := make(map[string][]nat.PortBinding)
+	portReg := regexp.MustCompile(`^\d+`)
+	for key, value := range m {
+		containerPort := portReg.Find([]byte(key))
+		exposedPorts[string(containerPort)] = value
 	}
-	return string(logs)
+	return exposedPorts
 }
 
-// Cleanup stops and removes the container, it also removes any volumes
-// created by the container. This should be called after for every creation
-// of a container to avoid leaking system resources.
-func (c *Container) Cleanup() {
-	c.t.Helper()
-
-	cmd := exec.Command("docker", "container", "stop", c.ID)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		c.t.Fatalf("could not stop container: %v: %v: %v", c.ID, string(output), err)
+func listify(m map[string]string) []string {
+	if m == nil {
+		return nil
 	}
-	cmd = exec.Command("docker", "container", "rm", c.ID)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		c.t.Fatalf("could not remove container: %v: %v: %v", c.ID, string(output), err)
+	list := make([]string, 0)
+	for key, value := range m {
+		list = append(list, key+"="+value)
 	}
-
-	if c.Volumes != nil && len(c.Volumes) > 0 {
-		args := []string{"volume", "rm"}
-		args = append(args, c.Volumes...)
-		cmd = exec.Command("docker", args...)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			c.t.Fatalf("could not remove volumes for container: %v: %v: %v", c.ID, string(output), err)
-		}
-	}
-
+	return list
 }
+
+

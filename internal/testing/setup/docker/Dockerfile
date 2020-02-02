@@ -1,4 +1,4 @@
-# go image with docker installed to run tests.
+# go image with docker installed to run tests in CI.
 # bind docker sockets on start up, to connect host docker to container docker.
 FROM golang:1.13-alpine
 

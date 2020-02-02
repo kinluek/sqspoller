@@ -194,7 +194,7 @@ $ echo $TMPDIR
 /var/folders/2s/tn0t3h3x4gn76z0w1plydw380000gp/T/
 ```
 When running the tests for the first time with ``` go test```, 
-if the localstack/localstack image is not already downloaded on the machine, the test functions will
+if the localstack/localstack image is not already downloadeded on the machine, the test functions will
 download the image first, which will cause the tests to run longer than expected. To avoid this,
 pull the image before hand with:
 
