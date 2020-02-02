@@ -14,7 +14,7 @@ import (
 )
 
 func TestPoller(t *testing.T) {
-	svc, queueURL, teardown := setup.SQS(t)
+	svc, queueURL, teardown := setup.SQS(t, 30)
 	defer teardown()
 
 	Test := PollerTests{svc, queueURL}
@@ -554,4 +554,5 @@ func (p *PollerTests) SetupErrors(t *testing.T) {
 	if err := poller.Run(); err != sqspoller.ErrNoReceiveMessageParams {
 		t.Fatalf("unexpected error returned, wanted: ErrNoReceiveMessageParams, got %v", err)
 	}
+	
 }
