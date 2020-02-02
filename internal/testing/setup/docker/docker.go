@@ -4,12 +4,16 @@ import (
 	"context"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	"io/ioutil"
 	"regexp"
 	"testing"
 	"time"
 )
+
+const localstackImage = "localstack/localstack:0.10.7"
 
 // Container represents a docker container and holds the information required
 // for communicating with the it.
@@ -18,7 +22,6 @@ type Container struct {
 	ExposedPorts map[string][]nat.PortBinding
 	running      bool
 }
-
 
 // newClient creates a new docker client.
 func newClient(t *testing.T) *client.Client {
@@ -39,10 +42,13 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string) *Container
 	cli := newClient(t)
 	defer cli.Close()
 
+	// Make sure we have the image to start the container from.
+	imageCheckAndPull(t, ctx, cli, localstackImage)
+
 	// Create container
 	containerConfig := container.Config{
 		Env:   listify(envars),
-		Image: "localstack/localstack",
+		Image: localstackImage,
 	}
 	hostConfig := container.HostConfig{
 		AutoRemove:      true,
@@ -72,7 +78,6 @@ func StartLocalStackContainer(t *testing.T, envars map[string]string) *Container
 		running:      true,
 	}
 }
-
 
 // StopContainer stops and removes a running container.
 func StopContainer(t *testing.T, container *Container, timeout time.Duration) {
@@ -120,7 +125,36 @@ func NetworkConnect(t *testing.T, network string, containerID string) {
 	ctx := context.Background()
 
 	if err := cli.NetworkConnect(ctx, network, containerID, nil); err != nil {
-		t.Fatalf("could not connect container %v, to netowork %v",  containerID[:12], network)
+		t.Fatalf("could not connect container %v, to netowork %v", containerID[:12], network)
+	}
+}
+
+// imageCheckAndPull checks to see if the image exists on the machine, if it doesn't
+// the image is pulled from docker.io.
+func imageCheckAndPull(t *testing.T, ctx context.Context, cli *client.Client, image string) {
+	filters := filters.NewArgs()
+	filters.Add("reference", image)
+	images, err := cli.ImageList(ctx, types.ImageListOptions{
+		All:     false,
+		Filters: filters,
+	})
+	if err != nil {
+		t.Fatalf("could not list images %v", err)
+	}
+	if len(images) == 0 {
+		t.Logf("could not find %v locally", image)
+		t.Logf("pulling image %v from docker.io...", image)
+		r, err := cli.ImagePull(ctx, "docker.io/" + image, types.ImagePullOptions{
+
+		})
+		if err != nil {
+			t.Fatalf("could not pull %v image %v", image, err)
+		}
+		_, err = ioutil.ReadAll(r)
+		if err != nil {
+			t.Fatalf("error downloading %v image %v", image, err)
+		}
+		t.Logf("finished downloading image %v", image)
 	}
 }
 
@@ -145,5 +179,3 @@ func listify(m map[string]string) []string {
 	}
 	return list
 }
-
-
