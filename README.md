@@ -1,5 +1,6 @@
 [![kinluek](https://circleci.com/gh/kinluek/sqspoller.svg?style=shield)](https://circleci.com/gh/kinluek/sqspoller)
 [![GoDoc](https://godoc.org/github.com/kinluek/sqspoller?status.svg)](https://godoc.org/github.com/kinluek/sqspoller)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 # SQS-Poller
 SQS-Poller is a simple queue polling framework, designed specifically to work with AWS SQS.
