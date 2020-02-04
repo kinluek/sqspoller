@@ -16,15 +16,15 @@ else
 	# for sibling containers to be connected to.
 	docker container run \
 	-v /var/run/docker.sock:/var/run/docker.sock \
-	-v $(PWD):/go/code \
+	-v $(PWD):/sqspoller \
 	-e DOCKER_NETWORK=${NETWORK} \
 	-e ENVIRONMENT=CI \
 	-e CGO_ENABLED=0 \
 	--network ${NETWORK} \
-	kinluek/go-docker:entry \
-	go test -v -cover
+	--entrypoint '/bin/sh' \
+	golang:1.13-alpine \
+    -c 'cd /sqspoller && go test -v -cover /sqspoller'
 
-	# run code in docker container, provide the NETWORK ENV
 	docker network rm ${NETWORK}
 endif
 
