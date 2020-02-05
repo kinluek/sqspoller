@@ -9,6 +9,6 @@ variables.
 
 Run ```go run main.go --help``` to see what configurations variables are available.
 
-## Perquisites
+## Prequisites
 
 Before running the playground poller, make sure docker is installed and running on your machine. 
