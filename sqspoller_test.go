@@ -374,10 +374,10 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 		QueueUrl: p.queueURL,
 	})
 
-	// Set up MessageHandler - confirm that sqspoller.TackingValue is contained
+	// Set up MessageHandler - confirm that sqspoller.TrackingValue is contained
 	// within ctx object.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
-		_, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+		_, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TrackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
 		}

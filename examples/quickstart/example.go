@@ -33,7 +33,7 @@ func main() {
 	poller.OnMessage(func(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 
 		// the framework adds tracking values to the ctx object for each handler.
-		v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+		v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TrackingValue)
 		fmt.Println("TRACE ID:", v.TraceID)
 		fmt.Println("RECEIVE TIME:", v.Now)
 
