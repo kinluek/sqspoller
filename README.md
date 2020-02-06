@@ -193,6 +193,8 @@ To see how you can experiment and play around with a local SQS and poller instan
 
 ## Dependencies
 
+* Go Version 1.13+
+
 Just in case you was worried about dependency bloat, the core package functions only rely on two third party modules, which are:
 
  * github.com/aws/aws-sdk-go v1.28.9 - What the framework is built for.
