@@ -129,8 +129,8 @@ func imageCheckAndPull(ctx context.Context, cli *client.Client, image string) er
 		return fmt.Errorf("could not list images %v", err)
 	}
 	if len(images) == 0 {
-		fmt.Printf("could not find %v locally\n", image)
-		fmt.Printf("pulling image %v from docker.io...\n", image)
+		fmt.Printf("[docker-setup] could not find %v locally\n", image)
+		fmt.Printf("[docker-setup] pulling image %v from docker.io...\n", image)
 		r, err := cli.ImagePull(ctx, "docker.io/"+image, types.ImagePullOptions{})
 		if err != nil {
 			return fmt.Errorf("could not pull %v image %v", image, err)
@@ -139,7 +139,7 @@ func imageCheckAndPull(ctx context.Context, cli *client.Client, image string) er
 		if err != nil {
 			return fmt.Errorf("error downloading %v image %v", image, err)
 		}
-		fmt.Printf("finished downloading image %v\n", image)
+		fmt.Printf("[docker-setup] finished downloading image %v\n", image)
 	}
 	return nil
 }
