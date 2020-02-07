@@ -36,10 +36,10 @@ func (p *Poller) SetHandlerTimeout(t time.Duration) {
 	p.handlerTimeout = t
 }
 
-// SetRequestTimeout lets the user set the timeout on requesting a new message
-// from the SQS queue. If the timeout occurs, error will be passed to the OnMessage
-// error handler. If the caller wishes to continue poller after a request timeout,
-// the timeout error must be whitelisted in the error handler.
+// SetRequestTimeout lets the user set the timeout on requesting for a new message
+// from the SQS queue. If the timeout occurs, ErrRequestTimeout will be passed to
+// the OnError handler. If the caller wishes to continue polling after a the timeout,
+// the ErrRequestTimeout error must be whitelisted in the error handler.
 func (p *Poller) SetRequestTimeout(t time.Duration) {
 	p.RequestTimeout = t
 }

@@ -3,6 +3,7 @@ package sqspoller
 import (
 	"context"
 	"errors"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ var (
 	ErrNoErrorHandler         = errors.New("ErrNoErrorHandler: no error handler set on poller instance")
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
 	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: messageHandler took to long to process message")
+	ErrRequestTimeout         = errors.New("ErrRequestTimeout: requesting message from queue timed out")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
 	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
@@ -164,8 +166,8 @@ func (p *Poller) Run() error {
 	defer cancel()
 
 	// Apply middleware upon starting.
-	// Apply the timeout as the innermost middleware, so that timeout errors can
-	// be caught by custom middleware to stop the poller from exiting.
+	// Apply the timeout as the innermost middleware, so that timeout errors
+	// can be caught by custom middleware to stop the poller from exiting.
 	msgHandler := applyTimeout(p.messageHandler, p.handlerTimeout)
 	msgHandler = wrapMiddleware(msgHandler, p.innerMiddleware...)
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
@@ -231,11 +233,27 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 }
 
 // receiveMessage applies the request timeout to the context object calling the
-// sqs.ReceiveMessageWithContext function, with the receive message parameters.
+// sqs.ReceiveMessageWithContext function with the receive message parameters.
 func (p *Poller) receiveMessage(ctx context.Context) (*sqs.ReceiveMessageOutput, error) {
+
+	// Set the request timeout on the context object, before making the request
+	// to receive the message from the queue.
 	ctx, cancel := context.WithTimeout(ctx, p.RequestTimeout)
 	defer cancel()
-	return p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
+
+	out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+
+			// If the function errored out due to the timeout, then
+			// return ErrRequestTimeout to simplify error assertions
+			// for the caller.
+			if awsErr.OrigErr() == context.DeadlineExceeded {
+				return nil, ErrRequestTimeout
+			}
+		}
+	}
+	return out, err
 }
 
 // handle handles the results from the call to sqs.ReceiveMessageWithContext

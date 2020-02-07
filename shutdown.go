@@ -5,11 +5,11 @@ import (
 	"time"
 )
 
-// shutdownMode represents a mode of shutdown
+// shutdownMode is the type for a mode of shutdown.
 type shutdownMode int
 
+// shutdown modes:
 const (
-	// shutdown modes:
 	now shutdownMode = iota
 	graceful
 	after
