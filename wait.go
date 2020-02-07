@@ -15,9 +15,6 @@ func waitForError(ctx context.Context, errChan <-chan error) error {
 			return err
 		}
 	case <-ctx.Done():
-		if err := <-errChan; err != nil {
-			return err
-		}
 		return ctx.Err()
 	}
 	return nil

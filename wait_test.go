@@ -42,21 +42,6 @@ func Test_waitForError(t *testing.T) {
 			t.Fatalf("expected waitForError() to return context.Canceled, got %v", err)
 		}
 	})
-
-	t.Run("error from error channel after context cancelled", func(t *testing.T) {
-		errChan := make(chan error)
-		ctx, cancel := context.WithCancel(context.Background())
-		ErrConfirmed := errors.New("confirmed")
-		go func() {
-			cancel()
-			time.Sleep(50 * time.Millisecond)
-			errChan <- ErrConfirmed
-		}()
-		if err := waitForError(ctx, errChan); err != ErrConfirmed {
-			t.Fatalf("expected waitForError() to return ErrConfirmed, got %v", err)
-		}
-	})
-
 }
 
 func Test_waitForInterval(t *testing.T) {
