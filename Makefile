@@ -1,8 +1,5 @@
 PWD := ${CURDIR}
 
-test:
-	CGO_ENABLED=0 go test -v ./...
-
 # provide a docker network name for this command eg: make NETWORK=test dockertest
 dockertest:
 ifndef NETWORK
@@ -27,14 +24,3 @@ else
 
 	docker network rm ${NETWORK}
 endif
-
-build_go_docker:
-	docker build -t kinluek/go-docker:entry ./internal/testing/docker/
-
-push_go_docker:
-	docker push kinluek/go-docker:entry
-
-update_go_docker: build_go_docker push_go_docker
-
-localstack:
-#	docker container run -d -p 4567-4584:4567-4584 -e SERVICES=sqs -e DEBUG=1 -e DATA_DIR=/tmp/localstack/data -e DOCKER_HOST=unix:///var/run/docker.sock -v $TMPDIR:/tmp/localstack localstack/localstack
