@@ -10,8 +10,8 @@ import (
 // before or after the MessageHandler code.
 type Middleware func(MessageHandler) MessageHandler
 
-// Use attaches global outerMiddleware to the Poller instance which will wrap
-// any  MessageHandler and MessageHandler specific outerMiddleware.
+// Use attaches global outerMiddleware to the Poller instance which will wrap any
+// MessageHandler and MessageHandler specific outerMiddleware.
 func (p *Poller) Use(middleware ...Middleware) {
 	if p.outerMiddleware == nil {
 		p.outerMiddleware = middleware
@@ -20,9 +20,8 @@ func (p *Poller) Use(middleware ...Middleware) {
 	}
 }
 
-// wrapMiddleware creates a new messageHandler by wrapping outerMiddleware around
-// a final messageHandler. The middlewares' Handlers will be executed by requests
-// in the order they are provided.
+// wrapMiddleware creates a new message handler by wrapping the middleware around
+// the given handler. The middlewares will be executed  in the order they are provided.
 func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHandler {
 
 	// start wrapping the messageHandler from the end of the outerMiddleware
@@ -38,8 +37,8 @@ func wrapMiddleware(handler MessageHandler, middleware ...Middleware) MessageHan
 	return handler
 }
 
-// applyTimeout applies a timeout to the messageHandler if the timeout is greater
-// than 0. If timeout is 0, then the function returns the messageHandler unchanged.
+// applyTimeout applies a timeout to the message handler if the timeout is greater
+// than 0. If timeout is 0, then the function returns the message handler unchanged.
 func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler {
 	if timeout > 0 {
 		handler = wrapMiddleware(handler, handlerTimeout(timeout))
@@ -48,8 +47,8 @@ func applyTimeout(handler MessageHandler, timeout time.Duration) MessageHandler 
 }
 
 // handlerTimeout takes a timeout duration and returns ErrHandlerTimeout if the
-// messageHandler cannot process the message within that time. The user can then
-// use other outerMiddleware to check for ErrHandlerTimeout and decide whether to
+// message handler cannot process the message within that time. The user can then
+// use other middleware to check for ErrHandlerTimeout and decide whether to
 // exit or move onto the next poll request.
 //
 // handlerTimeout middleware can only be applied via the Poller.SetHandlerTimeout
@@ -89,8 +88,8 @@ func handlerTimeout(t time.Duration) Middleware {
 	return f
 }
 
-// IgnoreEmptyResponses stops the data from being passed down to the inner
-// messageHandler, if there is no message to be handled.
+// IgnoreEmptyResponses stops the data from being passed down to the inner message
+// handler, if there is no message to be handled.
 func IgnoreEmptyResponses() Middleware {
 
 	f := func(handler MessageHandler) MessageHandler {

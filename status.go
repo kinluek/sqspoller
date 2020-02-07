@@ -48,5 +48,11 @@ func (p *Poller) validateSetup() error {
 	if p.receiveMsgInput == nil {
 		return ErrNoReceiveMessageParams
 	}
+
+	// set the default request timeout, if the caller has not explicitly set one.
+	if p.RequestTimeout <= 0 {
+		p.RequestTimeout = defaultRequestTimeout
+	}
+
 	return nil
 }

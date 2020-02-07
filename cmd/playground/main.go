@@ -41,7 +41,7 @@ var (
 func MessageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.MessageOutput) error {
 
 	// access tracking values from context
-	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TrackingValue)
 	fmt.Println("Trace ID: ", v.TraceID)
 	fmt.Println("Receive Time: ", v.Now)
 
@@ -60,7 +60,7 @@ func MessageHandler(ctx context.Context, client *sqs.SQS, msgOutput *sqspoller.M
 func ErrorHandler(ctx context.Context, err error) error {
 
 	// access tracking values from context
-	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+	v := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TrackingValue)
 	fmt.Println("Trace ID: ", v.TraceID)
 	fmt.Println("Receive Time: ", v.Now)
 

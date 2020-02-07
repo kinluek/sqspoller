@@ -1,6 +1,7 @@
 package testsetup
 
 import (
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -20,6 +21,7 @@ import (
 func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
 	t.Helper()
 	testEnv := os.Getenv("ENVIRONMENT")
+	fmt.Println("[test-setup] starting localstack container...")
 
 	// Create containerized SQS
 	container, err := docker.StartLocalStackContainer(map[string]string{
@@ -78,6 +80,7 @@ func SQS(t *testing.T, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *stri
 	}
 
 	teardown = func() {
+		fmt.Println("[test-teardown] cleaning up container resources...")
 		if err := docker.StopContainer(container, 30*time.Second); err != nil {
 			t.Fatal(err)
 		}

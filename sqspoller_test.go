@@ -25,6 +25,7 @@ func TestPoller(t *testing.T) {
 	t.Run("shutdown - after: time limit not reached", Test.ShutdownAfterLimitNotReached)
 	t.Run("shutdown - after: time limit reached", Test.ShutdownAfterLimitReached)
 	t.Run("timeout - handling", Test.HandlerTimeout)
+	t.Run("timeout - receiving message", Test.RequestTimeout)
 	t.Run("LastPollTime updates", Test.LastPollTime)
 	t.Run("context - has tracking value", Test.TrackingValueOnContext)
 	t.Run("race - shutdown", Test.RaceShutdown)
@@ -374,10 +375,10 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 		QueueUrl: p.queueURL,
 	})
 
-	// Set up MessageHandler - confirm that sqspoller.TackingValue is contained
+	// Set up MessageHandler - confirm that sqspoller.TrackingValue is contained
 	// within ctx object.
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
-		_, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TackingValue)
+		_, ok := ctx.Value(sqspoller.TrackingKey).(*sqspoller.TrackingValue)
 		if !ok {
 			t.Fatalf("ctx should container CtxValues object")
 		}
@@ -394,6 +395,35 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 	poller.OnMessage(msgHandler)
 	poller.OnError(errorHandler)
 	poller.Run()
+
+}
+
+func (p *PollerTests) RequestTimeout(t *testing.T) {
+	poller := sqspoller.New(p.sqsClient)
+
+	// Set the wait time to be 20 seconds, we'll set a request timeout
+	// shorter than this to see if it works.
+	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
+		QueueUrl:        p.queueURL,
+		WaitTimeSeconds: aws.Int64(20),
+	})
+
+	// Set request timeout.
+	poller.SetRequestTimeout(1 * time.Second)
+
+	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
+		return nil
+	}
+	errhandler := func(ctx context.Context, err error) error {
+		return err
+	}
+
+	poller.OnMessage(msgHandler)
+	poller.OnError(errhandler)
+
+	if err := poller.Run(); err != sqspoller.ErrRequestTimeout {
+		t.Errorf("unexpected error returned, wanted DeadlineExceeded, got %v", err)
+	}
 
 }
 

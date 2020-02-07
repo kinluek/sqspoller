@@ -3,6 +3,7 @@ package sqspoller
 import (
 	"context"
 	"errors"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/google/uuid"
@@ -14,11 +15,17 @@ var (
 	ErrNoErrorHandler         = errors.New("ErrNoErrorHandler: no error handler set on poller instance")
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
 	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: messageHandler took to long to process message")
+	ErrRequestTimeout         = errors.New("ErrRequestTimeout: requesting message from queue timed out")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
 	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
-	ErrAlreadyRunning         = errors.New("ErrAlreadyShuttingDown: poller is already running")
+	ErrAlreadyRunning         = errors.New("ErrAlreadyRunning: poller is already running")
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
+)
+
+const (
+	// the default request timeout
+	defaultRequestTimeout = 30 * time.Second
 )
 
 // MessageHandler is a function which handles the incoming SQS message.
@@ -41,12 +48,12 @@ type ErrorHandler func(ctx context.Context, err error) error
 type ctxKey int
 
 // TrackingKey should be used to access the values on the context object of type
-// *TackingValue.
+// *TrackingValue.
 const TrackingKey ctxKey = 1
 
-// TackingValue represents the values stored on the context object, for each poll
+// TrackingValue represents the values stored on the context object, for each poll
 // the context object will store the time of message received and a trace ID.
-type TackingValue struct {
+type TrackingValue struct {
 	TraceID string
 	Now     time.Time
 }
@@ -69,8 +76,14 @@ type Poller struct {
 	// response is received, the CurrentInterval will drop back down to 0.
 	CurrentInterval time.Duration
 
+	// Timeout on requesting for a new message from SQS. By default, this will
+	// be 30 seconds, if it has not been set manually.
+	RequestTimeout time.Duration
+
 	// Time to wait for messageHandler to process message, if messageHandler
 	// function takes longer than this to return, then the program is exited.
+	// The timeout only takes into account the time for the core message handler
+	// to complete, it does not include the time added for middleware.
 	handlerTimeout time.Duration
 
 	errorHandler    ErrorHandler   // Handler used to handle message request errors
@@ -139,12 +152,12 @@ func (p *Poller) OnError(handler ErrorHandler) {
 // Run starts the poller, the poller will continuously poll SQS until an error is
 // returned, or explicitly told to shutdown.
 func (p *Poller) Run() error {
+
 	// Validate run
 	if err := p.checkAndSetRunningStatus(); err != nil {
 		return err
 	}
 	defer p.resetRunState()
-
 	if err := p.validateSetup(); err != nil {
 		return err
 	}
@@ -152,7 +165,9 @@ func (p *Poller) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Apply middleware upon starting
+	// Apply middleware upon starting.
+	// Apply the timeout as the innermost middleware, so that timeout errors
+	// can be caught by custom middleware to stop the poller from exiting.
 	msgHandler := applyTimeout(p.messageHandler, p.handlerTimeout)
 	msgHandler = wrapMiddleware(msgHandler, p.innerMiddleware...)
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
@@ -187,11 +202,11 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 			p.LastPollTime = time.Now()
 
 			// add tracking info to context object
-			v := TackingValue{TraceID: uuid.New().String(), Now: time.Now()}
+			v := TrackingValue{TraceID: uuid.New().String(), Now: time.Now()}
 			ctx = context.WithValue(ctx, TrackingKey, &v)
 
 			// Make request to SQS queue for message.
-			out, sqsErr := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
+			out, sqsErr := p.receiveMessage(ctx)
 
 			// Handle ReceiveMessageWithContext results in separate goroutine.
 			// and listen for errors on error channel.
@@ -215,6 +230,30 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 	}()
 
 	return errorChan
+}
+
+// receiveMessage applies the request timeout to the context object calling the
+// sqs.ReceiveMessageWithContext function with the receive message parameters.
+func (p *Poller) receiveMessage(ctx context.Context) (*sqs.ReceiveMessageOutput, error) {
+
+	// Set the request timeout on the context object, before making the request
+	// to receive the message from the queue.
+	ctx, cancel := context.WithTimeout(ctx, p.RequestTimeout)
+	defer cancel()
+
+	out, err := p.client.ReceiveMessageWithContext(ctx, p.receiveMsgInput, p.options...)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+
+			// If the function errored out due to the timeout, then
+			// return ErrRequestTimeout to simplify error assertions
+			// for the caller.
+			if awsErr.OrigErr() == context.DeadlineExceeded {
+				return nil, ErrRequestTimeout
+			}
+		}
+	}
+	return out, err
 }
 
 // handle handles the results from the call to sqs.ReceiveMessageWithContext
