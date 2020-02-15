@@ -88,18 +88,17 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel
 		return err
 	case after:
 		finalErr := p.finishCurrentJob(pollingErrors)
-		for {
-			select {
-			case err := <-finalErr:
-				cancel()
-				p.shutdownErrors <- nil
-				return err
-			case <-sd.timeout:
-				cancel()
-				p.shutdownErrors <- ErrShutdownGraceful
-				return ErrShutdownGraceful
-			}
+		select {
+		case err := <-finalErr:
+			cancel()
+			p.shutdownErrors <- nil
+			return err
+		case <-sd.timeout:
+			cancel()
+			p.shutdownErrors <- ErrShutdownGraceful
+			return ErrShutdownGraceful
 		}
+
 	default:
 		// This code should never be reached! Urgent fix
 		// required if this error is ever returned!
