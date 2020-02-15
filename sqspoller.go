@@ -16,6 +16,7 @@ var (
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
 	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: messageHandler took to long to process message")
 	ErrRequestTimeout         = errors.New("ErrRequestTimeout: requesting message from queue timed out")
+	ErrStopPolling            = errors.New("ErrStopPolling: poller received stop request")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
 	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
@@ -218,14 +219,17 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 				return
 			}
 
-			// handle polling back off if message responses from queue are empty.
+			// Handle polling back off if message responses from queue are empty.
 			if err := p.handlePollInterval(ctx); err != nil {
 				errorChan <- err
 				return
 			}
-
 			errorChan <- nil
-			p.checkForStopRequests()
+
+			// Stop polling if shutdown requests has been received.
+			if err := p.checkForStopRequests(); err == ErrStopPolling {
+				break
+			}
 		}
 	}()
 

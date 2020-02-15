@@ -124,14 +124,16 @@ func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
 }
 
 // checkForStopRequests is called at the end of a poll cycle to check whether any
-// stop requests have been made. If a stop request is received, the function blocks
-// the poller from making anymore requests. This should happen before a graceful
-// shutdown to ensure that no more requests to the queue are made.
-func (p *Poller) checkForStopRequests() {
+// stop requests have been made. If a stop request is received, the function will
+// return ErrStopPolling to tell the poller to break the polling loop. This should
+// happen before a graceful shutdown to ensure that no more requests to the queue
+// are made.
+func (p *Poller) checkForStopRequests() error {
 	select {
 	case <-p.stopRequest:
 		p.stopConfirmed <- struct{}{}
-		<-p.stopRequest
+		return ErrStopPolling
 	default:
+		return nil
 	}
 }
