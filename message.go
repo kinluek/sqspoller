@@ -32,14 +32,16 @@ func (m *Message) Delete() (*sqs.DeleteMessageOutput, error) {
 
 // convertMessage converts an sqs.ReceiveMessageOutput to sqspoller.MessageOutput.
 func convertMessage(msgOut *sqs.ReceiveMessageOutput, svc *sqs.SQS, qURL string) *MessageOutput {
-	messages := make([]*Message, 0)
-	for _, msg := range msgOut.Messages {
-		message := Message{
-			Message:  msg,
-			client:   svc,
-			queueURL: qURL,
+	var messages []*Message
+	if !messageOutputIsEmpty(msgOut) {
+		messages = make([]*Message, len(msgOut.Messages))
+		for i, msg := range msgOut.Messages {
+			messages[i] = &Message{
+				Message:  msg,
+				client:   svc,
+				queueURL: qURL,
+			}
 		}
-		messages = append(messages, &message)
 	}
 	return &MessageOutput{
 		ReceiveMessageOutput: msgOut,

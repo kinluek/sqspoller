@@ -16,12 +16,14 @@ var (
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
 	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: messageHandler took to long to process message")
 	ErrRequestTimeout         = errors.New("ErrRequestTimeout: requesting message from queue timed out")
-	ErrStopPolling            = errors.New("ErrStopPolling: poller received stop request")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
 	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
 	ErrAlreadyRunning         = errors.New("ErrAlreadyRunning: poller is already running")
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
+
+	// for internal use, to break the polling loop.
+	errStopPolling = errors.New("errStopPolling: poller received stop request")
 )
 
 const (
@@ -68,6 +70,7 @@ type Poller struct {
 	// Holds the time of the last poll request that was made. This can be checked
 	// periodically, to confirm the Poller is running as expected.
 	LastPollTime time.Time
+
 	// Maximum time interval between each poll when poll requests are returning
 	// empty responses.
 	IdlePollInterval time.Duration
@@ -227,7 +230,7 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 			errorChan <- nil
 
 			// Stop polling if shutdown requests has been received.
-			if err := p.checkForStopRequests(); err == ErrStopPolling {
+			if err := p.checkForStopRequests(); err == errStopPolling {
 				break
 			}
 		}
