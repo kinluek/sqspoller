@@ -21,9 +21,6 @@ var (
 	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
 	ErrAlreadyRunning         = errors.New("ErrAlreadyRunning: poller is already running")
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
-
-	// for internal use, to break the polling loop.
-	errStopPolling = errors.New("errStopPolling: poller received stop request")
 )
 
 const (
@@ -224,10 +221,12 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 				errorChan <- err
 				return
 			}
+
+			// Remember to return nil on the channel if everything was successful.
 			errorChan <- nil
 
-			// Stop polling if shutdown requests has been received.
-			if err := p.checkForStopRequests(); err == errStopPolling {
+			// Stop polling if stop request has been received.
+			if p.stopRequestReceived() {
 				break
 			}
 		}
