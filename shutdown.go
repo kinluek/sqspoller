@@ -23,41 +23,33 @@ type shutdown struct {
 
 // ShutdownGracefully gracefully shuts down the poller.
 func (p *Poller) ShutdownGracefully() error {
-	if !p.isRunning() {
-		return nil
-	}
-	if err := p.checkAndSetShuttingDownStatus(); err != nil {
-		return err
-	}
-
-	p.shutdown <- &shutdown{
+	return p.shutdownForInput(&shutdown{
 		sig:     graceful,
 		timeout: nil,
-	}
-	return <-p.shutdownErrors
+	})
 }
 
 // ShutdownAfter will attempt to shutdown gracefully, if graceful shutdown cannot
 // be achieved within the given time frame, the Poller will exit, potentially
 // leaking unhandled resources.
 func (p *Poller) ShutdownAfter(t time.Duration) error {
-	if !p.isRunning() {
-		return nil
-	}
-	if err := p.checkAndSetShuttingDownStatus(); err != nil {
-		return err
-	}
-
-	p.shutdown <- &shutdown{
+	return p.shutdownForInput(&shutdown{
 		sig:     after,
 		timeout: time.After(t),
-	}
-	return <-p.shutdownErrors
+	})
 }
 
 // ShutdownNow shuts down the Poller instantly, potentially leaking unhandled
 // resources.
 func (p *Poller) ShutdownNow() error {
+	return p.shutdownForInput(&shutdown{
+		sig:     now,
+		timeout: nil,
+	})
+}
+
+// shutdownForInput executes the shutdown for the given input.
+func (p *Poller) shutdownForInput(input *shutdown) error {
 	if !p.isRunning() {
 		return nil
 	}
@@ -65,10 +57,7 @@ func (p *Poller) ShutdownNow() error {
 		return err
 	}
 
-	p.shutdown <- &shutdown{
-		sig:     now,
-		timeout: nil,
-	}
+	p.shutdown <- input
 	return <-p.shutdownErrors
 }
 
