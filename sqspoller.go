@@ -267,11 +267,8 @@ func (p *Poller) receiveMessage(ctx context.Context) (*sqs.ReceiveMessageOutput,
 func (p *Poller) handle(ctx context.Context, msgHandler MessageHandler, out *sqs.ReceiveMessageOutput, sqsErr error) error {
 	if sqsErr != nil {
 
-		// call error handler is sqs error is not nil.
+		// call error handler if sqs error is not nil.
 		if err := p.errorHandler(ctx, sqsErr); err != nil {
-
-			// if error was not resolved in handler
-			// then send error into channel and exit.
 			return err
 		}
 	}
