@@ -60,11 +60,12 @@ func (p *Poller) shutdownForInput(input *shutdown) error {
 	return <-p.shutdownErrors
 }
 
-// handleShutdown handles the shutdown logic for the three different shutdown
+// handleShutdown handles the shutdown orchestration for the  different shutdown
 // modes.
 func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error) error {
 	switch sd.sig {
 	case now:
+		p.stopRequest <- struct{}{}
 		p.shutdownErrors <- nil
 		return ErrShutdownNow
 	case graceful:

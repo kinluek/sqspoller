@@ -194,10 +194,13 @@ func (p *Poller) Run() error {
 // returned on the returned channel.
 func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan error {
 
-	errorChan := make(chan error)
+	// Add buffer of one, so that the polling cycle can finish if the error is
+	// not collected. Without the buffer, this may leak a blocked goroutine if
+	// the poller exits due to a non-graceful shutdown.
+	pollingErrors := make(chan error, 1)
 
 	go func() {
-		defer close(errorChan)
+		defer close(pollingErrors)
 
 		for {
 			p.LastPollTime = time.Now()
@@ -212,18 +215,18 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 			// Handle the results returned from the request for new messages
 			// from the SQS queue.
 			if err := p.handle(ctx, msgHandler, out, sqsErr); err != nil {
-				errorChan <- err
+				pollingErrors <- err
 				return
 			}
 
 			// Handle polling back off if message responses from queue are empty.
 			if err := p.handlePollInterval(ctx); err != nil {
-				errorChan <- err
+				pollingErrors <- err
 				return
 			}
 
 			// Remember to return nil on the channel if everything was successful.
-			errorChan <- nil
+			pollingErrors <- nil
 
 			// Stop polling if stop request has been received.
 			if p.stopRequestReceived() {
@@ -232,7 +235,7 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 		}
 	}()
 
-	return errorChan
+	return pollingErrors
 }
 
 // receiveMessage applies the request timeout to the context object calling the
