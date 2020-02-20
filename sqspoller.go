@@ -212,12 +212,9 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 			// Make request to SQS queue for message.
 			out, sqsErr := p.receiveMessage(ctx)
 
-			// Handle ReceiveMessageWithContext results in separate goroutine.
-			// and listen for errors on error channel.
-			handlerErrors := p.handle(ctx, msgHandler, out, sqsErr)
-
-			// Wait for msgHandler to handle message and check returned errors.
-			if err := waitForError(ctx, handlerErrors); err != nil {
+			// Handle the results returned from the request for new messages
+			// from the SQS queue.
+			if err := p.handle(ctx, msgHandler, out, sqsErr); err != nil {
 				errorChan <- err
 				return
 			}
@@ -264,37 +261,26 @@ func (p *Poller) receiveMessage(ctx context.Context) (*sqs.ReceiveMessageOutput,
 }
 
 // handle handles the results from the call to sqs.ReceiveMessageWithContext
-// function, by passing the results through the message and error handlers. The
-// function returns a channel for which the caller can listen on to receive the
-// resulting error.
-func (p *Poller) handle(ctx context.Context, msgHandler MessageHandler, out *sqs.ReceiveMessageOutput, sqsErr error) <-chan error {
-	handlerErrors := make(chan error)
+// function, by passing the results through the message and error handlers.
+func (p *Poller) handle(ctx context.Context, msgHandler MessageHandler, out *sqs.ReceiveMessageOutput, sqsErr error) error {
+	if sqsErr != nil {
 
-	go func() {
-		defer close(handlerErrors)
+		// call error handler is sqs error is not nil.
+		if err := p.errorHandler(ctx, sqsErr); err != nil {
 
-		if sqsErr != nil {
-
-			// call error handler is sqs error is not nil.
-			if err := p.errorHandler(ctx, sqsErr); err != nil {
-
-				// if error was not resolved in handler
-				// then send error into channel and exit.
-				handlerErrors <- err
-				return
-			}
+			// if error was not resolved in handler
+			// then send error into channel and exit.
+			return err
 		}
+	}
 
-		// determine queue empty states from message output.
-		p.queueEmpty = messageOutputIsEmpty(out)
+	// determine queue empty states from message output.
+	p.queueEmpty = messageOutputIsEmpty(out)
 
-		// handle message if there was no sqs error or if the error was resolved
-		if err := msgHandler(ctx, p.client, convertMessage(out, p.client, p.queueURL)); err != nil {
-			handlerErrors <- err
-			return
-		}
-		handlerErrors <- nil
-	}()
+	// handle message if there was no sqs error or if the error was resolved
+	if err := msgHandler(ctx, p.client, convertMessage(out, p.client, p.queueURL)); err != nil {
+		return err
+	}
 
-	return handlerErrors
+	return nil
 }
