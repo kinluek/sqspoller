@@ -1,7 +1,6 @@
 package sqspoller
 
 import (
-	"context"
 	"time"
 )
 
@@ -63,31 +62,26 @@ func (p *Poller) shutdownForInput(input *shutdown) error {
 
 // handleShutdown handles the shutdown logic for the three different shutdown
 // modes.
-func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel context.CancelFunc) error {
+func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error) error {
 	switch sd.sig {
 	case now:
-		cancel()
 		p.shutdownErrors <- nil
 		return ErrShutdownNow
 	case graceful:
 		finalErr := p.finishCurrentJob(pollingErrors)
 		err := <-finalErr
-		cancel()
 		p.shutdownErrors <- nil
 		return err
 	case after:
 		finalErr := p.finishCurrentJob(pollingErrors)
 		select {
 		case err := <-finalErr:
-			cancel()
 			p.shutdownErrors <- nil
 			return err
 		case <-sd.timeout:
-			cancel()
 			p.shutdownErrors <- ErrShutdownGraceful
 			return ErrShutdownGraceful
 		}
-
 	default:
 		// This code should never be reached! Urgent fix
 		// required if this error is ever returned!

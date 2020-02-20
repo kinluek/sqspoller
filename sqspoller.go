@@ -184,7 +184,7 @@ func (p *Poller) Run() error {
 				return err
 			}
 		case sd := <-p.shutdown:
-			return p.handleShutdown(sd, pollingErrors, cancel)
+			return p.handleShutdown(sd, pollingErrors)
 		}
 
 	}
