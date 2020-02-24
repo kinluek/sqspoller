@@ -49,9 +49,6 @@ func (p *Poller) ShutdownNow() error {
 
 // shutdownForInput executes the shutdown for the given input.
 func (p *Poller) shutdownForInput(input *shutdown) error {
-	if !p.isRunning() {
-		return nil
-	}
 	if err := p.checkAndSetShuttingDownStatus(); err != nil {
 		return err
 	}
