@@ -5,21 +5,6 @@ import (
 	"time"
 )
 
-// waitForError waits for the error channel to return it's error, if a cancellation
-// signal is received before the error from the channel is received, the function
-// will exit with a non nil error.
-func waitForError(ctx context.Context, errChan <-chan error) error {
-	select {
-	case err := <-errChan:
-		if err != nil {
-			return err
-		}
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return nil
-}
-
 // handlePollInterval handles the time to wait according to the IdlePollInterval
 // and CurrentInterval. It also handles the adjustment of the CurrentInterval
 // based on the queueEmpty flag.

@@ -1,7 +1,6 @@
 package sqspoller
 
 import (
-	"context"
 	"time"
 )
 
@@ -23,41 +22,33 @@ type shutdown struct {
 
 // ShutdownGracefully gracefully shuts down the poller.
 func (p *Poller) ShutdownGracefully() error {
-	if !p.isRunning() {
-		return nil
-	}
-	if err := p.checkAndSetShuttingDownStatus(); err != nil {
-		return err
-	}
-
-	p.shutdown <- &shutdown{
+	return p.shutdownForInput(&shutdown{
 		sig:     graceful,
 		timeout: nil,
-	}
-	return <-p.shutdownErrors
+	})
 }
 
 // ShutdownAfter will attempt to shutdown gracefully, if graceful shutdown cannot
 // be achieved within the given time frame, the Poller will exit, potentially
 // leaking unhandled resources.
 func (p *Poller) ShutdownAfter(t time.Duration) error {
-	if !p.isRunning() {
-		return nil
-	}
-	if err := p.checkAndSetShuttingDownStatus(); err != nil {
-		return err
-	}
-
-	p.shutdown <- &shutdown{
+	return p.shutdownForInput(&shutdown{
 		sig:     after,
 		timeout: time.After(t),
-	}
-	return <-p.shutdownErrors
+	})
 }
 
 // ShutdownNow shuts down the Poller instantly, potentially leaking unhandled
 // resources.
 func (p *Poller) ShutdownNow() error {
+	return p.shutdownForInput(&shutdown{
+		sig:     now,
+		timeout: nil,
+	})
+}
+
+// shutdownForInput executes the shutdown for the given input.
+func (p *Poller) shutdownForInput(input *shutdown) error {
 	if !p.isRunning() {
 		return nil
 	}
@@ -65,44 +56,37 @@ func (p *Poller) ShutdownNow() error {
 		return err
 	}
 
-	p.shutdown <- &shutdown{
-		sig:     now,
-		timeout: nil,
-	}
+	p.shutdown <- input
 	return <-p.shutdownErrors
 }
 
-// handleShutdown handles the shutdown logic for the three different shutdown
+// handleShutdown handles the shutdown orchestration for the  different shutdown
 // modes.
-func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error, cancel context.CancelFunc) error {
+func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error) error {
 	switch sd.sig {
 	case now:
-		cancel()
+		p.stopRequest <- struct{}{}
 		p.shutdownErrors <- nil
 		return ErrShutdownNow
 	case graceful:
 		finalErr := p.finishCurrentJob(pollingErrors)
 		err := <-finalErr
-		cancel()
 		p.shutdownErrors <- nil
 		return err
 	case after:
 		finalErr := p.finishCurrentJob(pollingErrors)
-		for {
-			select {
-			case err := <-finalErr:
-				cancel()
-				p.shutdownErrors <- nil
-				return err
-			case <-sd.timeout:
-				cancel()
-				p.shutdownErrors <- ErrShutdownGraceful
-				return ErrShutdownGraceful
-			}
+		select {
+		case err := <-finalErr:
+			p.shutdownErrors <- nil
+			return err
+		case <-sd.timeout:
+			p.shutdownErrors <- ErrShutdownGraceful
+			return ErrShutdownGraceful
 		}
 	default:
 		// This code should never be reached! Urgent fix
 		// required if this error is ever returned!
+		p.shutdownErrors <- ErrIntegrityIssue
 		return ErrIntegrityIssue
 	}
 }
@@ -124,15 +108,16 @@ func (p *Poller) finishCurrentJob(pollingErrors <-chan error) <-chan error {
 	return finalErr
 }
 
-// checkForStopRequests is called at the end of a poll cycle to check whether any
-// stop requests have been made. If a stop request is received, the function blocks
-// the poller from making anymore requests. This should happen before a graceful
-// shutdown to ensure that no more requests to the queue are made.
-func (p *Poller) checkForStopRequests() {
+// stopRequestReceived is called at the end of a poll cycle to check whether any
+// stop requests have been made. If a stop request is received, the function will
+// return true, to tell the poller to break the polling loop. This should happen
+// before a graceful shutdown to ensure that no more requests to the queue are made.
+func (p *Poller) stopRequestReceived() bool {
 	select {
 	case <-p.stopRequest:
 		p.stopConfirmed <- struct{}{}
-		<-p.stopRequest
+		return true
 	default:
+		return false
 	}
 }
