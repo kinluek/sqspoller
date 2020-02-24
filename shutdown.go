@@ -86,6 +86,7 @@ func (p *Poller) handleShutdown(sd *shutdown, pollingErrors <-chan error) error 
 	default:
 		// This code should never be reached! Urgent fix
 		// required if this error is ever returned!
+		p.shutdownErrors <- ErrIntegrityIssue
 		return ErrIntegrityIssue
 	}
 }
