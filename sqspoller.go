@@ -18,8 +18,8 @@ var (
 	ErrRequestTimeout         = errors.New("ErrRequestTimeout: requesting message from queue timed out")
 	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
 	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
-	ErrAlreadyShuttingDown    = errors.New("ErrAlreadyShuttingDown: poller is already in the process of shutting down")
-	ErrAlreadyRunning         = errors.New("ErrAlreadyRunning: poller is already running")
+	ErrNotCloseable           = errors.New("ErrNotCloseable: poller is either stopped or already shutting down")
+	ErrNotRunnable            = errors.New("ErrNotRunnable: poller is either already running or shutting down")
 	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
@@ -98,8 +98,9 @@ type Poller struct {
 	// duration.
 	queueEmpty bool
 
-	running        int64          // 1 if Poller is in running state, 0 if not.
-	shuttingDown   int64          // 1 if Poller is in the process of shutting down, 0 if not.
+	// runStatus tells us the running status of the poller, 0 for off, 1 for running
+	// and 2 for shutting down.
+	runStatus      int64
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
@@ -158,7 +159,7 @@ func (p *Poller) Run() error {
 	if err := p.checkAndSetRunningStatus(); err != nil {
 		return err
 	}
-	defer p.resetRunState()
+	defer p.resetRunStatus()
 	if err := p.validateSetup(); err != nil {
 		return err
 	}

@@ -127,8 +127,8 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 		t.Fatalf("unexpected error shutting down now %v", err)
 	}
 
-	if err := poller.ShutdownNow(); err != nil {
-		t.Fatalf("shutdown while poller not running should not return error: %v", err)
+	if err := poller.ShutdownNow(); err != sqspoller.ErrNotCloseable {
+		t.Fatalf("unexpected error shutting down on stopped poller: %v", err)
 	}
 
 }
@@ -201,8 +201,8 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 		t.Fatalf("expected confirmed to be true, but got false")
 	}
 
-	if err := poller.ShutdownGracefully(); err != nil {
-		t.Fatalf("shutdown while poller not running should not return error: %v", err)
+	if err := poller.ShutdownGracefully(); err != sqspoller.ErrNotCloseable {
+		t.Fatalf("unexpected error shutting down on stopped poller: %v", err)
 	}
 
 }
@@ -247,8 +247,8 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 		t.Fatalf("unexpected error shutting down: %v", err)
 	}
 
-	if err := poller.ShutdownAfter(time.Second); err != nil {
-		t.Fatalf("shutdown while poller not running should not return error: %v", err)
+	if err := poller.ShutdownAfter(time.Second); err != sqspoller.ErrNotCloseable {
+		t.Fatalf("unexpected error shutting down on stopped poller: %v", err)
 	}
 
 }
@@ -292,8 +292,8 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 		t.Fatalf("unexpected error return from pollingErrors: %v", err)
 	}
 
-	if err := poller.ShutdownAfter(100 * time.Millisecond); err != nil {
-		t.Fatalf("shutdown while poller not running should not return error: %v", err)
+	if err := poller.ShutdownAfter(100 * time.Millisecond); err != sqspoller.ErrNotCloseable {
+		t.Fatalf("unexpected error shutting down on stopped poller: %v", err)
 	}
 }
 
@@ -483,7 +483,7 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 
 	var confirmedErr bool
 	for err := range shutdownErrors {
-		if err == sqspoller.ErrAlreadyShuttingDown {
+		if err == sqspoller.ErrNotCloseable {
 			confirmedErr = true
 		}
 	}
