@@ -13,11 +13,15 @@ type Middleware func(MessageHandler) MessageHandler
 // Use attaches global outerMiddleware to the Poller instance which will wrap any
 // MessageHandler and MessageHandler specific outerMiddleware.
 func (p *Poller) Use(middleware ...Middleware) {
-	if p.outerMiddleware == nil {
-		p.outerMiddleware = middleware
-	} else {
-		p.outerMiddleware = append(p.outerMiddleware, middleware...)
+	p.mtx.Lock()
+	{
+		if p.outerMiddleware == nil {
+			p.outerMiddleware = middleware
+		} else {
+			p.outerMiddleware = append(p.outerMiddleware, middleware...)
+		}
 	}
+	p.mtx.Unlock()
 }
 
 // wrapMiddleware creates a new message handler by wrapping the middleware around
