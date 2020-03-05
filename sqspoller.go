@@ -12,16 +12,35 @@ import (
 )
 
 var (
-	ErrNoMessageHandler       = errors.New("ErrNoMessageHandler: no message handler set on poller instance")
-	ErrNoErrorHandler         = errors.New("ErrNoErrorHandler: no error handler set on poller instance")
+	// ErrNoMessageHandler occurs when the caller tries to run the poller before attaching a MessageHandler.
+	ErrNoMessageHandler = errors.New("ErrNoMessageHandler: no message handler set on poller instance")
+
+	// ErrNoErrorHandler occurs when the caller tries to run the poller before attaching an ErrorHandler.
+	ErrNoErrorHandler = errors.New("ErrNoErrorHandler: no error handler set on poller instance")
+
+	// ErrNoReceiveMessageParams occurs when the caller tries to run the poller before setting the ReceiveMessageParams.
 	ErrNoReceiveMessageParams = errors.New("ErrNoReceiveMessageParams: no ReceiveMessage parameters have been set")
-	ErrHandlerTimeout         = errors.New("ErrHandlerTimeout: messageHandler took to long to process message")
-	ErrRequestTimeout         = errors.New("ErrRequestTimeout: requesting message from queue timed out")
-	ErrShutdownNow            = errors.New("ErrShutdownNow: poller was suddenly shutdown")
-	ErrShutdownGraceful       = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
-	ErrNotCloseable           = errors.New("ErrNotCloseable: poller is either stopped or already shutting down")
-	ErrNotRunnable            = errors.New("ErrNotRunnable: poller is either already running or shutting down")
-	ErrIntegrityIssue         = errors.New("ErrIntegrityIssue: unknown integrity issue")
+
+	// ErrHandlerTimeout occurs when the MessageHandler times out before processing the message.
+	ErrHandlerTimeout = errors.New("ErrHandlerTimeout: message handler took to long to process message")
+
+	// ErrRequestTimeout occurs when the poller times out while requesting for a message off the SQS queue.
+	ErrRequestTimeout = errors.New("ErrRequestTimeout: requesting message from queue timed out")
+
+	// ErrShutdownNow occurs when the poller is suddenly shutdown.
+	ErrShutdownNow = errors.New("ErrShutdownNow: poller was suddenly shutdown")
+
+	// ErrShutdownGraceful occurs when the poller fails to shutdown gracefully.
+	ErrShutdownGraceful = errors.New("ErrShutdownGraceful: poller could not shutdown gracefully in time")
+
+	// ErrNotCloseable occurs when the caller tries to shut down the poller is already stopped or in the process of shutting down.
+	ErrNotCloseable = errors.New("ErrNotCloseable: poller is either stopped or already shutting down")
+
+	// ErrNotRunnable occurs when the caller tries to run the poller while the poller is already running or shutting down.
+	ErrNotRunnable = errors.New("ErrNotRunnable: poller is either already running or shutting down")
+
+	// ErrNotRunnable occurs when there is an integrity issue in the system.
+	ErrIntegrityIssue = errors.New("ErrIntegrityIssue: unknown integrity issue")
 )
 
 const (
