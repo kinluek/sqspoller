@@ -186,9 +186,6 @@ func (p *Poller) Run() error {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// Apply middleware upon starting.
 	// Apply the timeout as the innermost middleware, so that timeout errors
 	// can be caught by custom middleware to stop the poller from exiting.
@@ -197,7 +194,7 @@ func (p *Poller) Run() error {
 	msgHandler = wrapMiddleware(msgHandler, p.outerMiddleware...)
 
 	// Start polling
-	pollingErrors := p.poll(ctx, msgHandler)
+	pollingErrors := p.poll(msgHandler)
 
 	// Handle polling errors and shutdown signals
 	for {
@@ -215,7 +212,7 @@ func (p *Poller) Run() error {
 
 // poll continuously polls the SQS queue in a separate goroutine, the errors are
 // returned on the returned channel.
-func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan error {
+func (p *Poller) poll(msgHandler MessageHandler) <-chan error {
 
 	// Add buffer of one, so that the polling cycle can finish if the error is
 	// not collected. Without the buffer, this may leak a blocked goroutine if
@@ -230,7 +227,7 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 
 			// add tracking info to context object
 			v := TrackingValue{TraceID: uuid.New().String(), Now: time.Now()}
-			ctx = context.WithValue(ctx, TrackingKey, &v)
+			ctx := context.WithValue(context.Background(), TrackingKey, &v)
 
 			// Make request to SQS queue for message.
 			out, sqsErr := p.receiveMessage(ctx)
@@ -242,8 +239,9 @@ func (p *Poller) poll(ctx context.Context, msgHandler MessageHandler) <-chan err
 				return
 			}
 
-			// Handle polling back off if message responses from queue are empty.
-			if err := p.handlePollInterval(ctx); err != nil {
+			// Handle poll interval, back off the wait time if message responses
+			// from queue are empty.
+			if err := p.handlePollInterval(); err != nil {
 				pollingErrors <- err
 				return
 			}

@@ -1,14 +1,13 @@
 package sqspoller
 
 import (
-	"context"
 	"time"
 )
 
 // handlePollInterval handles the time to wait according to the IdlePollInterval
 // and CurrentInterval. It also handles the adjustment of the CurrentInterval
 // based on the queueEmpty flag.
-func (p *Poller) handlePollInterval(ctx context.Context) error {
+func (p *Poller) handlePollInterval() error {
 	// dont wait if no idle poll interval set
 	if p.IdlePollInterval == 0 {
 		return nil
@@ -21,12 +20,12 @@ func (p *Poller) handlePollInterval(ctx context.Context) error {
 	}
 
 	p.CurrentInterval = doubleWithLimit(p.CurrentInterval, p.IdlePollInterval)
-	return waitForInterval(ctx, p.CurrentInterval, p.exitWait)
+	return waitForInterval(p.CurrentInterval, p.exitWait)
 }
 
 // waitForInterval waits for the given interval time before moving on, unless
-// the context object is cancelled or an exit signal is received first.
-func waitForInterval(ctx context.Context, interval time.Duration, exit <-chan struct{}) error {
+// an exit signal is received first.
+func waitForInterval(interval time.Duration, exit <-chan struct{}) error {
 	nextPoll := time.NewTimer(interval)
 	defer nextPoll.Stop()
 
@@ -35,8 +34,6 @@ func waitForInterval(ctx context.Context, interval time.Duration, exit <-chan st
 		return nil
 	case <-exit:
 		return nil
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 }
 
