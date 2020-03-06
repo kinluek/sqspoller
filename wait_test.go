@@ -1,7 +1,6 @@
 package sqspoller
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -9,7 +8,7 @@ import (
 func Test_waitForInterval(t *testing.T) {
 
 	t.Run("standard wait", func(t *testing.T) {
-		if err := waitForInterval(context.Background(), time.Second, make(chan struct{})); err != nil {
+		if err := waitForInterval(time.Second, make(chan struct{})); err != nil {
 			t.Fatalf("expected waitForInterval() to return nil, got %v", err)
 		}
 	})
@@ -17,16 +16,8 @@ func Test_waitForInterval(t *testing.T) {
 	t.Run("exit before interval time", func(t *testing.T) {
 		exit := make(chan struct{}, 1)
 		exit <- struct{}{}
-		if err := waitForInterval(context.Background(), time.Second, exit); err != nil {
+		if err := waitForInterval(time.Second, exit); err != nil {
 			t.Fatalf("expected waitForInterval() to return nil, got %v", err)
-		}
-	})
-
-	t.Run("context cancelled before interval time", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		if err := waitForInterval(ctx, time.Second, make(chan struct{})); err != context.Canceled {
-			t.Fatalf("expected waitForInterval() to return context.Canceled, got %v", err)
 		}
 	})
 
