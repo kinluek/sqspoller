@@ -14,7 +14,7 @@ import (
 )
 
 func TestPoller(t *testing.T) {
-	svc, queueURL, teardown := testsetup.SQS(t, 60)
+	svc, queueURL, teardown := testsetup.SQS(t, 90)
 	defer teardown()
 
 	Test := PollerTests{svc, queueURL}
