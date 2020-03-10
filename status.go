@@ -4,14 +4,14 @@ import "sync/atomic"
 
 // resetRunStatus sets the running and shuttingDown status values back to 0.
 func (p *Poller) resetRunStatus() {
-	atomic.SwapInt64(&p.runStatus, 0)
+	atomic.SwapInt32(&p.runStatus, 0)
 }
 
 // checkAndSetRunningStatus is called at the start of the Run method to check
 // whether the poller is runnable. If not, the function returns ErrNotRunnable,
 // else it sets the running status value to 1, ie running.
 func (p *Poller) checkAndSetRunningStatus() error {
-	if ok := atomic.CompareAndSwapInt64(&p.runStatus, 0, 1); !ok {
+	if ok := atomic.CompareAndSwapInt32(&p.runStatus, 0, 1); !ok {
 		return ErrNotRunnable
 	}
 	return nil
@@ -22,7 +22,7 @@ func (p *Poller) checkAndSetRunningStatus() error {
 // ErrNotCloseable is returned. If it can be shut down, the poller run status is
 // set to 2 (shutting down).
 func (p *Poller) checkAndSetShuttingDownStatus() error {
-	if ok := atomic.CompareAndSwapInt64(&p.runStatus, 1, 2); !ok {
+	if ok := atomic.CompareAndSwapInt32(&p.runStatus, 1, 2); !ok {
 		return ErrNotCloseable
 	}
 	return nil

@@ -122,7 +122,7 @@ type Poller struct {
 
 	// runStatus tells us the running status of the poller, 0 for off, 1 for running
 	// and 2 for shutting down.
-	runStatus      int64
+	runStatus      int32
 	shutdown       chan *shutdown // channel to send shutdown instructions on.
 	shutdownErrors chan error     // channel to send errors on shutdown.
 	stopRequest    chan struct{}  // channel to send request to block polling
