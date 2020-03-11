@@ -136,6 +136,8 @@ type Poller struct {
 // New creates a new instance of the SQS Poller from an instance of sqs.SQS.
 func New(sqsSvc *sqs.SQS) *Poller {
 	p := Poller{
+		Mutex: &sync.Mutex{},
+
 		client: sqsSvc,
 
 		shutdown:       make(chan *shutdown),
