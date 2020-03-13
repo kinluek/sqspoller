@@ -11,7 +11,7 @@ else
 
 	# run code in docker container, and provide network name
 	# for sibling containers to be connected to.
-	docker container run \
+	docker container run --rm \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v $(PWD):/sqspoller \
 	-e DOCKER_NETWORK=${NETWORK} \

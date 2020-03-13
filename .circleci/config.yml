@@ -1,13 +1,8 @@
 version: 2
 jobs:
-  test:
+  build:
     machine:
       image: circleci/classic:201808-01
     steps:
       - checkout:
       - run: make NETWORK=test dockertest
-workflows:
-  version: 2
-  test:
-    jobs:
-      - test
