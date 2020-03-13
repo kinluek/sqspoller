@@ -81,7 +81,7 @@ type TrackingValue struct {
 // Poller is an instance of the polling framework, it contains the SQS client
 // and provides a simple API for polling an SQS queue.
 type Poller struct {
-	*sync.Mutex
+	mu sync.Mutex
 
 	client   *sqs.SQS
 	queueURL string
@@ -136,8 +136,6 @@ type Poller struct {
 // New creates a new instance of the SQS Poller from an instance of sqs.SQS.
 func New(sqsSvc *sqs.SQS) *Poller {
 	p := Poller{
-		Mutex: &sync.Mutex{},
-
 		client: sqsSvc,
 
 		shutdown:       make(chan *shutdown),
