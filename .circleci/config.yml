@@ -1,8 +1,27 @@
-#version: 2
-#jobs:
-#  build:
-#    machine:
-#      image: circleci/classic:201808-01
-#    steps:
-#      - checkout:
-#      - run: make NETWORK=test dockertest
+version: 2
+jobs:
+  build:
+    docker:
+      # Primary image to run tests in
+      - image: circleci/golang:1.13
+
+      # AWS SQS service
+      - image: localstack/localstack:0.10.7
+        name: queue
+        environment:
+          SERVICES:    "sqs"
+          DEBUG:       "1"
+          DATA_DIR:    "/tmp/localstack/data"
+          DOCKER_HOST: "unix:///var/run/docker.sock"
+
+    steps:
+      - checkout
+      - run:
+          name: Update dependencies to latest minor version
+          command: go get -u ./...
+      - run: cat ./go.mod
+      - run:
+          name: Run tests
+          environment:
+            QUEUE_ENDPOINT: http://queue:4576
+          command: go test -tags=integration -v -p 1 ./...
