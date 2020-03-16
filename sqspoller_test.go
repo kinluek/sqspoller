@@ -1,3 +1,5 @@
+// +build integration
+
 // tests in this file require that you have docker installed and running.
 package sqspoller_test
 
@@ -8,13 +10,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
 	"github.com/kinluek/sqspoller/internal/testing/testsetup"
+	"os"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestPoller(t *testing.T) {
-	svc, queueURL, teardown := testsetup.SQS(t, 90)
+	svc, queueURL, teardown := testsetup.SQS(t, os.Getenv("QUEUE_ENDPOINT"), 90)
 	defer teardown()
 
 	Test := PollerTests{svc, queueURL}

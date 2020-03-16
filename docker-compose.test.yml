@@ -1,0 +1,28 @@
+version: '3'
+
+networks:
+  sqspoller-network:
+    driver: bridge
+
+services:
+  sqspoller_tests:
+    build:
+      context: .
+      dockerfile: test.Dockerfile
+    environment:
+      QUEUE_ENDPOINT: http://queue:4576
+    volumes:
+      - .:/code
+    depends_on:
+      - queue
+    networks:
+      - sqspoller-network
+  queue:
+    image: localstack/localstack:0.10.7
+    environment:
+      SERVICES:    "sqs"
+      DEBUG:       "1"
+      DATA_DIR:    "/tmp/localstack/data"
+      DOCKER_HOST: "unix:///var/run/docker.sock"
+    networks:
+      - sqspoller-network
