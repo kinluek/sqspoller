@@ -45,9 +45,10 @@ jobs:
 
 workflows:
   version: 2
-  jobs:
-    - update_and_test
-    - commit_updates:
-        requires:
-          - update_and_test
+  update_test_and_commit:
+    jobs:
+      - update_and_test
+      - commit_updates:
+          requires:
+            - update_and_test
 
