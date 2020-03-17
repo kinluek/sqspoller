@@ -1,6 +1,7 @@
 version: 2
+
 jobs:
-  build:
+  update_and_test:
     docker:
       # Primary image to run tests in
       - image: circleci/golang:1.13
@@ -16,12 +17,37 @@ jobs:
 
     steps:
       - checkout
+      - run: touch workspace-test.txt
+      - run: ls
       - run:
           name: Update dependencies to latest minor version
           command: go get -u ./...
-      - run: cat ./go.mod
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
       - run:
           name: Run tests
           environment:
             QUEUE_ENDPOINT: http://queue:4576
           command: go test -tags=integration -v -p 1 ./...
+
+  commit_updates:
+    steps:
+      - attach_workspace:
+          at: .
+      - run: ls
+      - add_ssh_keys:
+          fingerprints:
+            - "fd:5b:d8:d3:41:53:19:6e:09:31:aa:d7:37:19:51:63"
+
+
+
+workflows:
+  version: 2
+  jobs:
+    - update_and_test
+    - commit_updates:
+        requires:
+          - update_and_test
+
