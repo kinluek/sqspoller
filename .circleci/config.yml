@@ -52,7 +52,9 @@ jobs:
             then
               echo "nothing to commit"
             else
-              echo "commit updates"
+              echo "committing updates"
+              git config --global user.email "kinluek@gmail.com"
+              git config --global user.name "Si Chan"
               git add go.mod go.sum
               git commit -m "[ci skip] update project dependencies"
               git push origin ${CIRCLE_BRANCH}
