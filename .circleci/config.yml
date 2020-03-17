@@ -19,8 +19,8 @@ jobs:
       - checkout
 
       # Update dependencies to latest minor version
+        name: Update dependencies to latest minor version
       - run:
-          name: Update dependencies to latest minor version
           command: go get -u ./...
 
       # Run the tests with updated dependencies
@@ -30,7 +30,7 @@ jobs:
             QUEUE_ENDPOINT: http://queue:4576
           command: go test -tags=integration -v -p 1 ./...
 
-      # Persist updated source code
+      # Persist updated source code to commit to github
       - persist_to_workspace:
           root: .
           paths:
@@ -42,10 +42,21 @@ jobs:
     steps:
       - attach_workspace:
           at: .
-      - run: git --no-pager diff
       - add_ssh_keys:
           fingerprints:
             - "fd:5b:d8:d3:41:53:19:6e:09:31:aa:d7:37:19:51:63"
+      - run:
+          name: Commit updated project dependencies
+          command: |
+            if [ -z "$(git --no-pager diff)" ]
+            then
+              echo "commit updates"
+              git add go.mod go.sum
+              git commit -m "[ci skip] update project dependencies"
+              git push origin ${CIRCLE_BRANCH}
+            else
+              echo "nothing to commit"
+            fi
 
 
 
