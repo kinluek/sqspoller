@@ -19,8 +19,8 @@ jobs:
       - checkout
 
       # Update dependencies to latest minor version
-        name: Update dependencies to latest minor version
       - run:
+        name: Update dependencies to latest minor version
           command: go get -u ./...
 
       # Run the tests with updated dependencies
