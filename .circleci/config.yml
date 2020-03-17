@@ -33,6 +33,8 @@ jobs:
           command: go test -tags=integration -v -p 1 ./...
 
   commit_updates:
+    docker:
+      - image: buildpack-deps:trusty
     steps:
       - attach_workspace:
           at: .
