@@ -17,20 +17,24 @@ jobs:
 
     steps:
       - checkout
-      - run: touch workspace-test.txt
-      - run: ls
+
+      # Update dependencies to latest minor version
       - run:
           name: Update dependencies to latest minor version
           command: go get -u ./...
-      - persist_to_workspace:
-          root: .
-          paths:
-            - .
+
+      # Run the tests with updated dependencies
       - run:
           name: Run tests
           environment:
             QUEUE_ENDPOINT: http://queue:4576
           command: go test -tags=integration -v -p 1 ./...
+
+      # Persist updated source code
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
 
   commit_updates:
     docker:
@@ -38,8 +42,7 @@ jobs:
     steps:
       - attach_workspace:
           at: .
-      - run: ls
-      - run: git diff
+      - run: git --no-pager diff
       - add_ssh_keys:
           fingerprints:
             - "fd:5b:d8:d3:41:53:19:6e:09:31:aa:d7:37:19:51:63"
