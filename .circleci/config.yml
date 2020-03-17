@@ -39,6 +39,7 @@ jobs:
       - attach_workspace:
           at: .
       - run: ls
+      - run: git diff
       - add_ssh_keys:
           fingerprints:
             - "fd:5b:d8:d3:41:53:19:6e:09:31:aa:d7:37:19:51:63"
