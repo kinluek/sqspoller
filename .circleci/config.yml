@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - checkout
-      - run: echo ${CIRCLE_BRANCH}
+    
       # Update dependencies to latest minor version
       - run:
           name: Update dependencies to latest minor version
@@ -38,7 +38,7 @@ jobs:
 
   commit_updates:
     docker:
-      - image: buildpack-deps:trusty
+      - image: buildpack-deps:trusty asdf
     steps:
       - attach_workspace:
           at: .
@@ -50,12 +50,12 @@ jobs:
           command: |
             if [ -z "$(git --no-pager diff)" ]
             then
+              echo "nothing to commit"
+            else
               echo "commit updates"
               git add go.mod go.sum
               git commit -m "[ci skip] update project dependencies"
               git push origin ${CIRCLE_BRANCH}
-            else
-              echo "nothing to commit"
             fi
 
 
