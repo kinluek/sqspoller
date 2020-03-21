@@ -12,7 +12,7 @@ import (
 
 // SQS will set up an SQS queue and return an initialised SQS client that can
 // interact with it.
-func SQS(t *testing.T, endPoint string, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL *string, teardown func()) {
+func SQS(t *testing.T, endPoint string, createQueueAttempts int) (sqsSvc *sqs.SQS, queueURL string, teardown func()) {
 	t.Helper()
 
 	// Create SQS client using AWS SDK
@@ -23,8 +23,9 @@ func SQS(t *testing.T, endPoint string, createQueueAttempts int) (sqsSvc *sqs.SQ
 	))
 	svc := sqs.New(sess)
 
-	// Create SQS queue in local container
-	// Keep retrying as local AWS environment will take time to be ready.
+	// Create SQS queue in local container.
+	// Keep retrying as local AWS environment will take time to be ready, if it is being
+	// spun up from docker images.
 	queueName := "test-queue"
 	var qURL *string
 	for i := 0; i < createQueueAttempts; i++ {
@@ -45,5 +46,5 @@ func SQS(t *testing.T, endPoint string, createQueueAttempts int) (sqsSvc *sqs.SQ
 		fmt.Println("[test-teardown] removing sqs resources...")
 	}
 
-	return svc, qURL, teardown
+	return svc, *qURL, teardown
 }

@@ -40,11 +40,17 @@ jobs:
     docker:
       - image: buildpack-deps:trusty
     steps:
+
+      # Attach the project with any potential updates to go.mod
       - attach_workspace:
           at: .
+
+      # Use the deploy key with write access
       - add_ssh_keys:
           fingerprints:
-            - "fd:5b:d8:d3:41:53:19:6e:09:31:aa:d7:37:19:51:63"
+            - "d3:6c:9d:4e:a8:f3:60:f1:68:4b:44:68:70:fc:cf:24"
+
+      # Check for changes and commit
       - run:
           name: Commit updated project dependencies
           command: |
@@ -53,6 +59,7 @@ jobs:
               echo "nothing to commit"
             else
               echo "committing updates"
+              ssh-keyscan -H github.com >> ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
               git config --global user.email "kinluek@gmail.com"
               git config --global user.name "Si Chan"
               git add go.mod go.sum
@@ -64,7 +71,24 @@ jobs:
 
 workflows:
   version: 2
+
+  # Run on every commit.
   update_test_and_commit:
+    jobs:
+      - update_and_test
+      - commit_updates:
+          requires:
+            - update_and_test
+
+  # Run on dev branch every night.
+  nightly_build:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - dev
     jobs:
       - update_and_test
       - commit_updates:
