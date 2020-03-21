@@ -30,6 +30,7 @@ jobs:
           environment:
             QUEUE_ENDPOINT: http://queue:4576
 
+      # Cache dependencies
       - save_cache:
           key: go-modules-v1-{{ checksum "go.sum" }}
           paths:
