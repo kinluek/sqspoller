@@ -12,7 +12,7 @@ services:
     environment:
       QUEUE_ENDPOINT: http://queue:4576
     volumes:
-      - .:/code
+      - ../../..:/code
     depends_on:
       - queue
     networks:

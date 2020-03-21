@@ -89,7 +89,6 @@ func NewEnv(region, queueName string) (env *SQS, teardown func() error, err erro
 	return &e, teardown, nil
 }
 
-
 // QueueMessageInput listens to text on stdin and sends it to the SQS queue
 // for the poller to receive.
 func QueueMessageInput(log *log.Logger, client *sqs.SQS, queueURL *string) {
