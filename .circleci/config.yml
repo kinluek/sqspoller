@@ -1,6 +1,40 @@
 version: 2
 
 jobs:
+  test:
+    docker:
+      # Primary image to run tests in
+      - image: circleci/golang:1.13
+
+      # AWS SQS service
+      - image: localstack/localstack:0.10.7
+        name: queue
+        environment:
+          SERVICES:    "sqs"
+          DEBUG:       "1"
+          DATA_DIR:    "/tmp/localstack/data"
+          DOCKER_HOST: "unix:///var/run/docker.sock"
+
+      steps:
+        - checkout
+
+        # Restore project dependencies from cache
+        - restore_cache:
+            keys:
+              - go-modules-v1-{{ checksum "go.sum" }}
+
+        # Run the tests
+        - run:
+            name: Run tests
+            command: go test -tags=integration -v -p 1
+            environment:
+              QUEUE_ENDPOINT: http://queue:4576
+
+        - save_cache:
+            key: go-modules-v1-{{ checksum "go.sum" }}
+            paths:
+              - "/go/pkg/mod"
+
   update_and_test:
     docker:
       # Primary image to run tests in
@@ -28,7 +62,7 @@ jobs:
           name: Run tests
           environment:
             QUEUE_ENDPOINT: http://queue:4576
-          command: go test -tags=integration -v -p 1 ./...
+          command: go test -tags=integration -v -p 1
 
       # Persist updated source code to commit to github
       - persist_to_workspace:
