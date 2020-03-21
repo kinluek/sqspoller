@@ -19,6 +19,7 @@
 
 # goland specific
 .idea
+.DS_Store
 
 ## experiments
 #internal/testing/docker/Dockerfile

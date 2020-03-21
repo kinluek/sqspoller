@@ -204,14 +204,10 @@ The rest of the dependencies that can be found in go.mod, are test dependencies.
 
 ## Testing 
 
+To run all the unit and integration tests, hit ```make test```
+
 Tests in the sqspoller_test.go file require that docker is installed and running on your machine, 
-as the tests spin up local SQS containers to test the framework against against.
+as the tests spin up local SQS containers to test the framework against.
 
-When running the tests, the setup code will check to see if the localstack/localstack:0.10.7 image
-exists on the machine, if it does not, the image will be pulled from docker.io before the tests are run.
-To avoid this stall, try pulling the image, manually, before running the tests, like so:
 
-```shell script
-docker pull localstack/localstack:0.10.7
-```
 

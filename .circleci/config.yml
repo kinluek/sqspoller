@@ -1,8 +1,130 @@
 version: 2
+
 jobs:
-  build:
-    machine:
-      image: circleci/classic:201808-01
+  test:
+    docker:
+      # Primary image to run tests in
+      - image: circleci/golang:1.13
+
+      # AWS SQS service
+      - image: localstack/localstack:0.10.7
+        name: queue
+        environment:
+          SERVICES:    "sqs"
+          DEBUG:       "1"
+          DATA_DIR:    "/tmp/localstack/data"
+          DOCKER_HOST: "unix:///var/run/docker.sock"
+
     steps:
-      - checkout:
-      - run: make NETWORK=test dockertest
+      - checkout
+
+      # Restore project dependencies from cache
+      - restore_cache:
+          keys:
+            - go-modules-v1-{{ checksum "go.sum" }}
+
+      # Run the tests
+      - run:
+          name: Run tests
+          command: go test -tags=integration -v -p 1
+          environment:
+            QUEUE_ENDPOINT: http://queue:4576
+
+      # Cache dependencies
+      - save_cache:
+          key: go-modules-v1-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
+
+  update_and_test:
+    docker:
+      # Primary image to run tests in
+      - image: circleci/golang:1.13
+
+      # AWS SQS service
+      - image: localstack/localstack:0.10.7
+        name: queue
+        environment:
+          SERVICES:    "sqs"
+          DEBUG:       "1"
+          DATA_DIR:    "/tmp/localstack/data"
+          DOCKER_HOST: "unix:///var/run/docker.sock"
+
+    steps:
+      - checkout
+
+      # Update dependencies to latest minor version
+      - run:
+          name: Update dependencies to latest minor version
+          command: go get -u ./...
+
+      # Run the tests with updated dependencies
+      - run:
+          name: Run tests
+          environment:
+            QUEUE_ENDPOINT: http://queue:4576
+          command: go test -tags=integration -v -p 1
+
+      # Persist updated source code to commit to github
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  commit_updates:
+    docker:
+      - image: buildpack-deps:trusty
+    steps:
+
+      # Attach the project with any potential updates to go.mod
+      - attach_workspace:
+          at: .
+
+      # Use the deploy key with write access
+      - add_ssh_keys:
+          fingerprints:
+            - "fd:5b:d8:d3:41:53:19:6e:09:31:aa:d7:37:19:51:63"
+
+      # Check for changes and commit
+      - run:
+          name: Commit updated project dependencies
+          command: |
+            if [ -z "$(git --no-pager diff)" ]
+            then
+              echo "nothing to commit"
+            else
+              echo "committing updates"
+              ssh-keyscan -H github.com >> ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+              git config --global user.email "kinluek@gmail.com"
+              git config --global user.name "Si Chan"
+              git add go.mod go.sum
+              git commit -m "[ci skip] update project dependencies"
+              git push origin ${CIRCLE_BRANCH}
+            fi
+
+
+
+workflows:
+  version: 2
+
+  # Run on every commit.
+  test_on_commit:
+    jobs:
+      - test
+
+
+  # Keep dependencies up to date, run on dev branch nightly.
+  nightly_build:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - dev
+    jobs:
+      - update_and_test
+      - commit_updates:
+          requires:
+            - update_and_test
+

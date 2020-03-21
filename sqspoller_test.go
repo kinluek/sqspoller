@@ -1,3 +1,5 @@
+// +build integration
+
 // tests in this file require that you have docker installed and running.
 package sqspoller_test
 
@@ -8,13 +10,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kinluek/sqspoller"
 	"github.com/kinluek/sqspoller/internal/testing/testsetup"
+	"os"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestPoller(t *testing.T) {
-	svc, queueURL, teardown := testsetup.SQS(t, 90)
+	svc, queueURL, teardown := testsetup.SQS(t, os.Getenv("QUEUE_ENDPOINT"), 90)
 	defer teardown()
 
 	Test := PollerTests{svc, queueURL}
@@ -37,7 +40,7 @@ func TestPoller(t *testing.T) {
 // PollerTests holds the tests for the Poller
 type PollerTests struct {
 	sqsClient *sqs.SQS
-	queueURL  *string
+	queueURL  string
 }
 
 func (p *PollerTests) BasicPolling(t *testing.T) {
@@ -45,7 +48,7 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 	// Put a message in the queue, ready to be received by the poller.
 	messageBody := "message-body"
 	sendResp, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
-		QueueUrl:    p.queueURL,
+		QueueUrl:   aws.String(p.queueURL),
 		MessageBody: aws.String(messageBody),
 	})
 	if err != nil {
@@ -55,7 +58,7 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 	// Create new poller using local queue.
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	// Attach MessageHandler and Start Polling.
@@ -95,7 +98,7 @@ func (p *PollerTests) BasicPolling(t *testing.T) {
 func (p *PollerTests) ShutdownNow(t *testing.T) {
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
@@ -135,7 +138,7 @@ func (p *PollerTests) ShutdownNow(t *testing.T) {
 
 func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
-		QueueUrl:    p.queueURL,
+		QueueUrl:    aws.String(p.queueURL),
 		MessageBody: aws.String("message"),
 	})
 	if err != nil {
@@ -144,7 +147,7 @@ func (p *PollerTests) ShutdownGracefully(t *testing.T) {
 
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	// Set up MessageHandler - start shutdown at the start of the
@@ -211,7 +214,7 @@ func (p *PollerTests) ShutdownAfterLimitNotReached(t *testing.T) {
 
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
@@ -257,7 +260,7 @@ func (p *PollerTests) ShutdownAfterLimitReached(t *testing.T) {
 
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
@@ -301,7 +304,7 @@ func (p *PollerTests) HandlerTimeout(t *testing.T) {
 
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	poller.SetHandlerTimeout(time.Millisecond)
@@ -328,7 +331,7 @@ func (p *PollerTests) LastPollTime(t *testing.T) {
 
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	msgHandler := func(ctx context.Context, client *sqs.SQS, msgOut *sqspoller.MessageOutput) error {
@@ -364,7 +367,7 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 
 	// Put a message in the queue.
 	_, err := p.sqsClient.SendMessage(&sqs.SendMessageInput{
-		QueueUrl:    p.queueURL,
+		QueueUrl:    aws.String(p.queueURL),
 		MessageBody: aws.String("messageBody"),
 	})
 	if err != nil {
@@ -372,7 +375,7 @@ func (p *PollerTests) TrackingValueOnContext(t *testing.T) {
 	}
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	// Set up MessageHandler - confirm that sqspoller.TrackingValue is contained
@@ -404,7 +407,7 @@ func (p *PollerTests) RequestTimeout(t *testing.T) {
 	// Set the wait time to be 20 seconds, we'll set a request timeout
 	// shorter than this to see if it works.
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl:        p.queueURL,
+		QueueUrl:        aws.String(p.queueURL),
 		WaitTimeSeconds: aws.Int64(20),
 	})
 
@@ -432,7 +435,7 @@ func (p *PollerTests) RaceShutdown(t *testing.T) {
 
 	poller := sqspoller.New(p.sqsClient)
 	poller.ReceiveMessageParams(&sqs.ReceiveMessageInput{
-		QueueUrl: p.queueURL,
+		QueueUrl: aws.String(p.queueURL),
 	})
 
 	c := sync.NewCond(&sync.Mutex{})
