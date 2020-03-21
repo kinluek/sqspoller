@@ -15,25 +15,25 @@ jobs:
           DATA_DIR:    "/tmp/localstack/data"
           DOCKER_HOST: "unix:///var/run/docker.sock"
 
-      steps:
-        - checkout
+    steps:
+      - checkout
 
-        # Restore project dependencies from cache
-        - restore_cache:
-            keys:
-              - go-modules-v1-{{ checksum "go.sum" }}
+      # Restore project dependencies from cache
+      - restore_cache:
+          keys:
+            - go-modules-v1-{{ checksum "go.sum" }}
 
-        # Run the tests
-        - run:
-            name: Run tests
-            command: go test -tags=integration -v -p 1
-            environment:
-              QUEUE_ENDPOINT: http://queue:4576
+      # Run the tests
+      - run:
+          name: Run tests
+          command: go test -tags=integration -v -p 1
+          environment:
+            QUEUE_ENDPOINT: http://queue:4576
 
-        - save_cache:
-            key: go-modules-v1-{{ checksum "go.sum" }}
-            paths:
-              - "/go/pkg/mod"
+      - save_cache:
+          key: go-modules-v1-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
 
   update_and_test:
     docker:
@@ -107,14 +107,15 @@ workflows:
   version: 2
 
   # Run on every commit.
-  update_test_and_commit:
+  test_on_commit:
     jobs:
       - update_and_test
       - commit_updates:
           requires:
             - update_and_test
 
-  # Run on dev branch every night.
+
+  # Keep dependencies up to date, run on dev branch nightly.
   nightly_build:
     triggers:
       - schedule:
