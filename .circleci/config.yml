@@ -109,10 +109,7 @@ workflows:
   # Run on every commit.
   test_on_commit:
     jobs:
-      - update_and_test
-      - commit_updates:
-          requires:
-            - update_and_test
+      - test
 
 
   # Keep dependencies up to date, run on dev branch nightly.
